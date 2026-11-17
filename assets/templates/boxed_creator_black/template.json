@@ -1,0 +1,44 @@
+{
+  "id": "boxed_creator_black",
+  "name": "Boxed Creator \u2014 Cyan Accent",
+  "version": 1,
+  "aspect": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": "Sans",
+    "deva": "Sans",
+    "beng": "Sans"
+  },
+  "size_px": 66,
+  "case": "none",
+  "colors": {
+    "primary": "#FFFFFF",
+    "active": "#38BDF8",
+    "outline": "#0F172A",
+    "shadow": "#0F172ACC",
+    "box": "#0F172AE6"
+  },
+  "outline_px": 4,
+  "shadow_px": 0,
+  "box": {
+    "enabled": true,
+    "padding_px": 18,
+    "radius_px": 14
+  },
+  "layout": {
+    "position": "lower_third",
+    "y_percent": 75,
+    "align": "center",
+    "max_words_per_line": 4,
+    "max_lines": 2
+  },
+  "animation": {
+    "type": "pop",
+    "in": "pop",
+    "out": "none",
+    "duration_ms": 160
+  }
+}

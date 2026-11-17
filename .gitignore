@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+data/
+secrets/cookies/*.txt
+.agent/inbox/*
+.agent/logs/*
+frontend/node_modules/
+frontend/dist/
+*.egg-info/
+dist/
+build/

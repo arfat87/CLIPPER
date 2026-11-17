@@ -1,0 +1,17 @@
+# CLIPPER — Config: Highlight Scoring & Ranking
+min_clip_seconds: 15.0
+max_clip_seconds: 60.0
+target_clip_seconds: 32.0
+min_clips: 3
+max_clips: 12
+quality_threshold: 0.55
+fallback_threshold: 0.40
+max_overlap_ratio: 0.30
+weights:
+  llm: 0.55
+  energy: 0.12
+  speech_rate: 0.08
+  reaction: 0.08
+  scene_dynamics: 0.05
+  heatmap: 0.07
+  asr_confidence: 0.05

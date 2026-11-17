@@ -1,0 +1,114 @@
+version: 1
+project: CLIPPER
+pause_mode: branch
+tasks:
+  - id: T-0.1
+    phase: 0
+    title: "Repo scaffold, uv environment, Makefile, config, AGENTS.md"
+    deps: []
+    status: DONE
+  - id: T-0.2
+    phase: 0
+    title: "HITL service: models, raise_blocker, SMTP notifier, IMAP watcher, CLI, loop runner"
+    deps: ["T-0.1"]
+    status: DONE
+  - id: T-0.3
+    phase: 0
+    title: "Config system (pydantic-settings + YAML configs)"
+    deps: ["T-0.1"]
+    status: DONE
+  - id: T-0.4
+    phase: 0
+    title: "Toolchain verification: FFmpeg libass/harfbuzz + Indic shaping test + /health"
+    deps: ["T-0.1"]
+    status: DONE
+  - id: T-0.5
+    phase: 0
+    title: "Sample media generator (English, Hindi, Hinglish, Bengali synthetic test clips)"
+    deps: ["T-0.1"]
+    status: DONE
+  - id: T-1.1
+    phase: 1
+    title: "Database models (Job, StageCheckpoint, Transcript, Clip, Render, Template)"
+    deps: ["T-0.3"]
+    status: DONE
+  - id: T-1.2
+    phase: 1
+    title: "Storage backend (LocalFS + S3 stub)"
+    deps: ["T-0.3"]
+    status: DONE
+  - id: T-1.3
+    phase: 1
+    title: "Pipeline orchestrator with stage checkpoints & retry-from-stage"
+    deps: ["T-1.1", "T-1.2"]
+    status: DONE
+  - id: T-1.4
+    phase: 1
+    title: "FastAPI app, REST endpoints (/jobs, /clips, /templates, /hitl, /health) & SSE stream"
+    deps: ["T-1.3"]
+    status: DONE
+  - id: T-2.1
+    phase: 2
+    title: "yt-dlp ingest wrapper with YouTube/IG/FB detection, heatmap capture & cookie support"
+    deps: ["T-1.3"]
+    status: DONE
+  - id: T-2.3
+    phase: 2
+    title: "Media normaliser (mezzanine 30fps MP4 + 16kHz mono WAV) and local file upload"
+    deps: ["T-2.1"]
+    status: DONE
+  - id: T-3.1
+    phase: 3
+    title: "ASR engine: faster-whisper word-level timestamps + offline synthetic/SRT fallback"
+    deps: ["T-2.3"]
+    status: DONE
+  - id: T-3.2
+    phase: 3
+    title: "Language detector + Hinglish heuristic + Devanagari/Roman/Bengali script normaliser"
+    deps: ["T-3.1"]
+    status: DONE
+  - id: T-4.1
+    phase: 4
+    title: "Highlight engine: thought-unit segmenter, audio/scene/heatmap signal features"
+    deps: ["T-3.2"]
+    status: DONE
+  - id: T-4.3
+    phase: 4
+    title: "LLM highlight scorer (Gemini API + Ollama + offline viral-hook heuristic scorer)"
+    deps: ["T-4.1"]
+    status: DONE
+  - id: T-4.5
+    phase: 4
+    title: "Hybrid fusion ranker (adaptive 3-12 clips, NMS, diversity, silence boundary snapping)"
+    deps: ["T-4.3"]
+    status: DONE
+  - id: T-5.1
+    phase: 5
+    title: "Auto-reframe 9:16/1:1/4:5 with speaker/face tracking & blurred-background fallback"
+    deps: ["T-2.3"]
+    status: DONE
+  - id: T-5.3
+    phase: 5
+    title: "Caption template JSON schema, loader, and 6 starter templates"
+    deps: ["T-0.4"]
+    status: DONE
+  - id: T-5.5
+    phase: 5
+    title: "Script-aware caption chunker + pysubs2 ASS builder with animations & font fallback"
+    deps: ["T-5.3", "T-3.2"]
+    status: DONE
+  - id: T-5.6
+    phase: 5
+    title: "FFmpeg single-pass clip renderer with libass burn-in and loudness normalisation"
+    deps: ["T-5.1", "T-5.5"]
+    status: DONE
+  - id: T-6.1
+    phase: 6
+    title: "Web UI: URL ingest, live progress, clip gallery, live CSS caption preview & template picker"
+    deps: ["T-1.4", "T-5.6"]
+    status: DONE
+  - id: T-7.1
+    phase: 7
+    title: "Unit & integration test suite across pipeline stages and HITL protocol"
+    deps: ["T-6.1"]
+    status: DONE

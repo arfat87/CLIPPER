@@ -1,0 +1,44 @@
+{
+  "id": "minimal_typewriter",
+  "name": "Minimal Typewriter \u2014 Coral",
+  "version": 1,
+  "aspect": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": "Sans",
+    "deva": "Sans",
+    "beng": "Sans"
+  },
+  "size_px": 62,
+  "case": "lower",
+  "colors": {
+    "primary": "#F1F5F9",
+    "active": "#FB7185",
+    "outline": "#020617",
+    "shadow": "#020617AA",
+    "box": null
+  },
+  "outline_px": 4,
+  "shadow_px": 2,
+  "box": {
+    "enabled": false,
+    "padding_px": 10,
+    "radius_px": 8
+  },
+  "layout": {
+    "position": "center",
+    "y_percent": 66,
+    "align": "center",
+    "max_words_per_line": 4,
+    "max_lines": 2
+  },
+  "animation": {
+    "type": "typewriter",
+    "in": "none",
+    "out": "none",
+    "duration_ms": 100
+  }
+}

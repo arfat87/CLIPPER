@@ -1,0 +1,44 @@
+{
+  "id": "bold_pop_yellow",
+  "name": "Bold Pop \u2014 Yellow Highlight",
+  "version": 1,
+  "aspect": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": "Sans",
+    "deva": "Sans",
+    "beng": "Sans"
+  },
+  "size_px": 74,
+  "case": "upper",
+  "colors": {
+    "primary": "#FFFFFF",
+    "active": "#FFE600",
+    "outline": "#000000",
+    "shadow": "#000000CC",
+    "box": null
+  },
+  "outline_px": 6,
+  "shadow_px": 3,
+  "box": {
+    "enabled": false,
+    "padding_px": 14,
+    "radius_px": 10
+  },
+  "layout": {
+    "position": "lower_third",
+    "y_percent": 72,
+    "align": "center",
+    "max_words_per_line": 3,
+    "max_lines": 2
+  },
+  "animation": {
+    "type": "highlight_word",
+    "in": "pop",
+    "out": "none",
+    "duration_ms": 150
+  }
+}

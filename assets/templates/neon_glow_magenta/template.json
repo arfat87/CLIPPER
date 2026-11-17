@@ -1,0 +1,44 @@
+{
+  "id": "neon_glow_magenta",
+  "name": "Neon Glow \u2014 Electric Magenta",
+  "version": 1,
+  "aspect": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": "Sans",
+    "deva": "Sans",
+    "beng": "Sans"
+  },
+  "size_px": 76,
+  "case": "upper",
+  "colors": {
+    "primary": "#FFFFFF",
+    "active": "#F43F5E",
+    "outline": "#1E1B4B",
+    "shadow": "#EC4899CC",
+    "box": null
+  },
+  "outline_px": 6,
+  "shadow_px": 4,
+  "box": {
+    "enabled": false,
+    "padding_px": 12,
+    "radius_px": 10
+  },
+  "layout": {
+    "position": "lower_third",
+    "y_percent": 70,
+    "align": "center",
+    "max_words_per_line": 3,
+    "max_lines": 2
+  },
+  "animation": {
+    "type": "highlight_word",
+    "in": "pop",
+    "out": "none",
+    "duration_ms": 150
+  }
+}

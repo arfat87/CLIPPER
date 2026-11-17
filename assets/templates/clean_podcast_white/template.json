@@ -1,0 +1,44 @@
+{
+  "id": "clean_podcast_white",
+  "name": "Clean Podcast \u2014 Warm Amber",
+  "version": 1,
+  "aspect": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": "Sans",
+    "deva": "Sans",
+    "beng": "Sans"
+  },
+  "size_px": 64,
+  "case": "none",
+  "colors": {
+    "primary": "#F8FAFC",
+    "active": "#F59E0B",
+    "outline": "#000000",
+    "shadow": "#00000099",
+    "box": null
+  },
+  "outline_px": 4,
+  "shadow_px": 2,
+  "box": {
+    "enabled": false,
+    "padding_px": 10,
+    "radius_px": 8
+  },
+  "layout": {
+    "position": "lower_third",
+    "y_percent": 76,
+    "align": "center",
+    "max_words_per_line": 5,
+    "max_lines": 2
+  },
+  "animation": {
+    "type": "fade_slide",
+    "in": "fade",
+    "out": "fade",
+    "duration_ms": 120
+  }
+}

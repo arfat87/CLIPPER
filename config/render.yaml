@@ -1,0 +1,15 @@
+# CLIPPER — Config: Render
+default_aspect: "9:16"
+resolutions:
+  "9:16": [1080, 1920]
+  "1:1": [1080, 1080]
+  "4:5": [1080, 1350]
+fps: 30
+video_codec: libx264
+crf: 21
+preset: veryfast
+audio_codec: aac
+audio_bitrate: 160k
+loudnorm_i: -14.0
+loudnorm_tp: -1.5
+loudnorm_lra: 11.0

@@ -1,0 +1,44 @@
+{
+  "id": "karaoke_neon_green",
+  "name": "Karaoke Fill \u2014 Neon Green",
+  "version": 1,
+  "aspect": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": "Sans",
+    "deva": "Sans",
+    "beng": "Sans"
+  },
+  "size_px": 70,
+  "case": "upper",
+  "colors": {
+    "primary": "#E2E8F0",
+    "active": "#00FF66",
+    "outline": "#090D16",
+    "shadow": "#000000AA",
+    "box": null
+  },
+  "outline_px": 5,
+  "shadow_px": 2,
+  "box": {
+    "enabled": false,
+    "padding_px": 12,
+    "radius_px": 8
+  },
+  "layout": {
+    "position": "lower_third",
+    "y_percent": 74,
+    "align": "center",
+    "max_words_per_line": 4,
+    "max_lines": 2
+  },
+  "animation": {
+    "type": "karaoke_fill",
+    "in": "pop",
+    "out": "none",
+    "duration_ms": 140
+  }
+}

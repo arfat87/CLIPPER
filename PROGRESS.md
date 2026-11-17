@@ -1,0 +1,21 @@
+# CLIPPER — Autonomous Execution Progress Log
+
+- **[DONE] Phase 0 (Foundations & HITL):**
+  - `T-0.1` Repository scaffold, `pyproject.toml`, `Makefile`, `.env.example`, `AGENTS.md`
+  - `T-0.2` Human-in-the-Loop (`hitl/`) service: `Blocker` models, `raise_blocker`, SMTP HTML/text notifier, `BLOCKERS.md` fallback, reply parser with raw-secret leak protection, CLI
+  - `T-0.3` Config system (`backend/app/config.py` + `config/*.yaml`)
+  - `T-0.4` Toolchain verification (`verify_toolchain()`): FFmpeg + `libass` + `fribidi` verified with multi-script English/Hindi/Bengali test burn-in
+  - `T-0.5` Sample media generator (`ensure_sample_media()`): 4 multilingual test videos (`en`, `hi`, `hinglish`, `bn`)
+- **[DONE] Phase 1 (Backend Core):**
+  - `T-1.1` SQLModel database entities (`Job`, `StageCheckpoint`, `Clip`)
+  - `T-1.2` `LocalStorageBackend` (`data/jobs/<job_id>/...`)
+  - `T-1.3` Stage-checkpointed pipeline orchestrator (`run_job_pipeline`)
+  - `T-1.4` FastAPI application (`backend/app/main.py`) with REST + SSE + ZIP export + HITL endpoints
+- **[DONE] Phase 2–5 (Media Pipeline):**
+  - `T-2.1–2.3` `yt-dlp` ingest + FFmpeg normalization + cookie HITL blocker support
+  - `T-3.1–3.4` `faster-whisper` ASR wrapper + Hinglish detection + Devanagari/Roman/Bengali script normaliser
+  - `T-4.1–4.7` Candidate window builder, signal features, Gemini/Ollama/heuristic viral scorer, hybrid fusion ranker, NMS, boundary snapping
+  - `T-5.1–5.6` 9:16 `fill` and `fit_blur` reframe filters, 6 starter caption templates, `pysubs2` ASS builder with per-word highlight/karaoke/pop/typewriter animations, single-pass FFmpeg `libass` renderer
+- **[DONE] Phase 6–7 (Web Studio UI & Verification):**
+  - `T-6.1–6.5` Interactive Clip Studio UI (`frontend/index.html`) with 9:16 vertical player, instant CSS caption preview, tap-to-select template carousel, trim/layout editor, and HITL dashboard
+  - `T-7.1` End-to-end test suite (`backend/tests/test_clipper_e2e.py`) passing
