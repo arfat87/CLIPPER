@@ -32,6 +32,13 @@
   - `T-0.6` (`integrations`): Aligned `hitl/` (`raise_blocker.py`, `cli.py`, `models.py`, `notifier.py`, `validators.py`) to `.clipper-state/` with `.agent/` backward compatibility + `hitl/tests/test_hitl_v2.py`.
   - `T-0.7` (`pipeline`): Generated deterministic `assets/samples/SHA256SUMS` and `backend/tests/pipeline/test_samples_and_fixtures.py` validating all sample media, transcripts, fixtures, and v2 templates.
   - `T-0.8` (`uiux`): Built React 18 + Vite + Tailwind + strict TS scaffold in `frontend/`, generated `src/api/schema.d.ts` from `contracts/openapi.yaml`, added MSW mock API handlers, and verified `tsc --noEmit`, `vite build`, and `vitest run` (3/3 passed).
+- **[DONE] Phase 1+ Parallel Lanes (`T-1.1`, `T-1.2`, `T-2.1`, `T-5.1`, `T-9.1`, `T-10.1` — `REV-0002` APPROVE):**
+  - `T-1.1` & `T-1.2` (`backend`): Added all 17 Spec v2 SQLModel tables, reversible Alembic migrations (`migrations/`), atomic `LocalStorageBackend`, and `S3StorageBackend` stub (`11 passed` API tests).
+  - `T-2.1` (`pipeline`): Enhanced `backend/pipeline/ingest/downloader.py` with URL canonicalization, SSRF IP guard, duration/disk guards, heatmap capture, and typed `IngestError` (`50 passed` ingest tests).
+  - `T-5.1` (`pipeline`): Built `backend/pipeline/providers/` (`GeminiProvider`, `OllamaProvider`, prompt-injection data wrapper, JSON-Schema + repair-once) (`9 passed` provider tests).
+  - `T-9.1` (`integrations`): Built read-only Google Drive sync (`drive/`), BFS crawl, incremental `changes.list`, native export, MD5 verify, traversal sanitizer, and read-only guard (`10 passed` drive tests).
+  - `T-10.1` (`uiux`): Built design system primitives (`frontend/src/components/ui/`), mobile/desktop + `/admin` shell routing, typed TanStack Query hooks (`schema.d.ts`), and Vitest tests (`8 passed`).
+
 
 
 
