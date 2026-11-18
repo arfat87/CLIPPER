@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "kind": "caption",
+  "scripts": ["latn", "deva", "beng"],
+  "meta": {
+    "id": "clean_minimal",
+    "name": "Clean Minimal - White",
+    "version": 1,
+    "author": "starter",
+    "license": "Template: MIT. Fonts: SIL OFL 1.1",
+    "tags": ["clean", "minimal", "podcast"]
+  },
+  "aspects": ["9:16", "1:1", "4:5"],
+  "fonts": {
+    "latn": {
+      "family": "Poppins",
+      "weight": 600,
+      "fallback": ["Noto Sans", "DejaVu Sans", "Sans"]
+    },
+    "deva": {
+      "family": "Noto Sans Devanagari",
+      "weight": 600,
+      "fallback": ["Mukta", "DejaVu Sans", "Sans"]
+    },
+    "beng": {
+      "family": "Noto Sans Bengali",
+      "weight": 600,
+      "fallback": ["Hind Siliguri", "DejaVu Sans", "Sans"]
+    }
+  },
+  "text": {
+    "size_px": 64,
+    "case": "none",
+    "letter_spacing_px": 0,
+    "line_height": 1.15
+  },
+  "colors": {
+    "primary": "#FFFFFF",
+    "active": "#F8FAFC",
+    "outline": "#000000",
+    "shadow": "#000000AA",
+    "box": null
+  },
+  "stroke": {
+    "outline_px": 3,
+    "shadow_px": 2,
+    "shadow_offset": [1, 2]
+  },
+  "box": {
+    "enabled": false,
+    "padding_px": 14,
+    "radius_px": 10,
+    "opacity": 0.8
+  },
+  "layout": {
+    "anchor": "bottom_center",
+    "y_percent": 70,
+    "align": "center",
+    "max_words_per_line": 4,
+    "max_lines": 2,
+    "max_chars": {
+      "latn": 26,
+      "deva": 20,
+      "beng": 20
+    },
+    "safe_area_profile": "shorts_default"
+  },
+  "animation": {
+    "mode": "pages",
+    "active_word": "none",
+    "in": "fade",
+    "out": "fade",
+    "duration_ms": 120,
+    "easing": "ease_out"
+  },
+  "emphasis": {
+    "keywords_bold": false,
+    "keyword_color": null,
+    "numbers_color": null
+  },
+  "emoji": {
+    "enabled": false
+  },
+  "speaker_colors": {
+    "enabled": false,
+    "palette": []
+  }
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 640" width="360" height="640">
+  <rect width="360" height="640" fill="#172554"/>
+  <rect x="40" y="405" width="280" height="54" rx="10" fill="#000000" fill-opacity="0.8"/>
+  <text x="180" y="442" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="28" fill="#FFFFFF">सफलता <tspan fill="#FFE600">DOSTO</tspan></text>
+</svg>
