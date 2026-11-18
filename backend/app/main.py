@@ -4,12 +4,10 @@ import asyncio
 import base64
 import copy
 import hashlib
-import io
 import json
 import os
 import tempfile
 import time
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +33,8 @@ from backend.app.models.entities import (
     Transcript,
 )
 from backend.app.routes_admin import router as admin_router
+from backend.app.routes_drive_health import router as drive_health_router
+from backend.app.routes_publish import router as publish_router
 from backend.app.services.admin import AdminError
 from backend.app.services.orchestrator import (
     STAGES,
@@ -63,7 +63,7 @@ from backend.pipeline.captions.template_loader import (
 from backend.pipeline.ingest.downloader import detect_platform
 from backend.pipeline.orchestrator import run_job_pipeline
 from backend.pipeline.render.renderer import render_clip_media
-from backend.pipeline.sample_generator import ensure_sample_media, verify_toolchain
+from backend.pipeline.sample_generator import ensure_sample_media
 from hitl.cli import run_loop_status
 from hitl.models import BlockerType, NeededItem
 from hitl.raise_blocker import create_or_get_blocker, list_blockers, resolve_blocker
@@ -181,6 +181,8 @@ async def _handle_admin_error(_request: Request, exc: AdminError) -> JSONRespons
 
 
 app.include_router(admin_router)
+app.include_router(drive_health_router)
+app.include_router(publish_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -564,19 +566,6 @@ def _find_idempotent_job(session: Session, key: str) -> Job | None:
     return None
 
 
-@app.get("/api/v1/health")
-def health_check() -> dict[str, Any]:
-    tc = verify_toolchain()
-    settings = get_settings()
-    return {
-        "status": "ok" if tc.get("ffmpeg_available") and tc.get("libass_enabled") else "degraded",
-        "toolchain": tc,
-        "llm_provider": settings.llm_provider,
-        "gemini_configured": bool(settings.gemini_api_key.strip()),
-        "smtp_configured": bool(settings.notify_smtp_user and settings.notify_smtp_app_password),
-    }
-
-
 @app.get("/api/v1/samples")
 def list_samples() -> list[dict[str, Any]]:
     return ensure_sample_media()
@@ -797,14 +786,14 @@ def list_jobs(
     if status is not None and status not in VALID_JOB_STATUSES:
         raise ApiError(422, "VALIDATION_ERROR", f"Invalid job status filter: {status!r}")
 
-    filters = [col(Job.deleted_at).is_(None)]
+    filters: list[Any] = [col(Job.deleted_at).is_(None)]
     if status is not None:
         filters.append(col(Job.status) == status)
 
     total_stmt = select(func.count()).select_from(Job).where(*filters)
     total = int(session.exec(total_stmt).one())
 
-    query_filters = list(filters)
+    query_filters: list[Any] = list(filters)
     if cursor:
         cur_ts, cur_id = _decode_cursor(cursor)
         query_filters.append(
@@ -1407,33 +1396,6 @@ def serve_clip_thumb(clip_id: str, session: Session = Depends(get_session)) -> F
     if not clip or not clip.thumb_path or not Path(clip.thumb_path).exists():
         raise ApiError(404, "VALIDATION_ERROR", "Thumbnail not found")
     return FileResponse(clip.thumb_path, media_type="image/jpeg")
-
-
-@app.get("/api/v1/jobs/{job_id}/download.zip")
-def download_job_zip(job_id: str, session: Session = Depends(get_session)) -> StreamingResponse:
-    _get_active_job_or_404(session, job_id)
-    clips = list(
-        session.exec(select(Clip).where(Clip.job_id == job_id).order_by(col(Clip.rank))).all()
-    )
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for c in clips:
-            prefix = f"clip_{c.rank:02d}_{c.id}"
-            if c.render_mp4_path and Path(c.render_mp4_path).exists():
-                zf.write(c.render_mp4_path, f"{prefix}.mp4")
-            if c.render_srt_path and Path(c.render_srt_path).exists():
-                zf.write(c.render_srt_path, f"{prefix}.srt")
-            if c.render_ass_path and Path(c.render_ass_path).exists():
-                zf.write(c.render_ass_path, f"{prefix}.ass")
-            pp = session.exec(select(PublishPack).where(PublishPack.clip_id == c.id)).first()
-            if pp and pp.path_json and Path(pp.path_json).exists():
-                zf.write(pp.path_json, f"{prefix}_publish_pack.json")
-    buf.seek(0)
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="clipper_{job_id}.zip"'},
-    )
 
 
 # --- Human-in-the-Loop (HITL) Protocol Endpoints ---
