@@ -1,0 +1,127 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cpu
+    image: clipper:cpu
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      CLIPPER_DEVICE: ${CLIPPER_DEVICE:-cpu}
+      ASR_DEVICE: ${ASR_DEVICE:-cpu}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/clipper.db}
+      QUEUE_URL: ${QUEUE_URL:-sqlite:////app/data/huey.db}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      DATA_DIR: /app/data
+      SECRETS_DIR: /app/secrets
+    ports:
+      - "${CLIPPER_API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+      - ./.clipper-state:/app/.clipper-state
+      - ./drive_mirror:/app/drive_mirror
+      - ./secrets:/app/secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cpu
+    image: clipper:cpu
+    restart: unless-stopped
+    command: ["python", "-m", "huey.bin.huey_consumer", "backend.pipeline.tasks.huey", "-w", "2"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      CLIPPER_DEVICE: ${CLIPPER_DEVICE:-cpu}
+      ASR_DEVICE: ${ASR_DEVICE:-cpu}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/clipper.db}
+      QUEUE_URL: ${QUEUE_URL:-sqlite:////app/data/huey.db}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      DATA_DIR: /app/data
+      SECRETS_DIR: /app/secrets
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+      - ./.clipper-state:/app/.clipper-state
+      - ./drive_mirror:/app/drive_mirror
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import backend, hitl, drive"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cuda
+    image: clipper:cuda
+    restart: unless-stopped
+    command: ["python3.11", "-m", "huey.bin.huey_consumer", "backend.pipeline.tasks.huey", "-w", "2"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      CLIPPER_DEVICE: cuda
+      ASR_DEVICE: cuda
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/clipper.db}
+      QUEUE_URL: ${QUEUE_URL:-sqlite:////app/data/huey.db}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      DATA_DIR: /app/data
+      SECRETS_DIR: /app/secrets
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+      - ./.clipper-state:/app/.clipper-state
+      - ./drive_mirror:/app/drive_mirror
+      - ./secrets:/app/secrets:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, video, utility]
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "${CLIPPER_HTTP_PORT:-80}:80"
+      - "${CLIPPER_HTTPS_PORT:-443}:443"
+    environment:
+      CLIPPER_DOMAIN: ${CLIPPER_DOMAIN:-localhost}
+      CLIPPER_TLS_MODE: ${CLIPPER_TLS_MODE:-internal}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  caddy_data:
+  caddy_config:
