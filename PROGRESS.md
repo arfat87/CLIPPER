@@ -42,3 +42,9 @@
 
 
 
+- **[DONE] Phase 1–2 Batch 2 Parallel Lanes (`T-1.3`, `T-2.2`, `T-2.3`, `T-9.2`, `T-10.2`, `T-10.6` — `REV-0003` APPROVE):**
+  - `T-1.3` (`backend`): Implemented Huey queue (`SqliteHuey`/`MemoryHuey`/`RedisHuey`), Spec v2 checkpointed orchestrator (`fetch`..`package`), `input_hash` cache/staleness, atomic temp-dir staging, retry/blocker/cancel handlers (`backend/app/services/{queue,orchestrator}.py`, `backend/tests/api/test_queue_orchestrator.py`).
+  - `T-2.2` (`pipeline`): Added Netscape cookie validation/redaction + Instagram/Facebook login-wall detection raising secret-free `CREDENTIAL` HITL blockers (`backend/pipeline/ingest/{cookies,downloader}.py`, `backend/tests/pipeline/test_ingest_cookies.py`).
+  - `T-2.3` (`pipeline`): Added `prepare.py` (`compute_media_fingerprint`, atomic FFmpeg CFR 30fps `mezzanine.mp4`, 16kHz mono `audio.wav`, bounded `media/thumbs/`, loudness/clipping/silence audio probe) with `ffprobe` synthetic media tests (`backend/tests/pipeline/test_prepare.py`).
+  - `T-9.2` (`integrations`): Added `.clipper.yaml` untrusted-data routing/ignore parser, deterministic offline `TREE.md` renderer, and `DriveSyncEvent` bus wired into `DriveSync` (`drive/{routing,tree,events,sync}.py`, `drive/tests/test_drive_tree_and_routing.py`).
+  - `T-10.2` & `T-10.6` (`uiux`): Implemented Home URL/Upload/Drive job creator + live `EventSource`/`Last-Event-ID` SSE timeline (`studio/HomeView.tsx`, `studio/JobTimelineView.tsx`), and Admin Templates (import -> validate -> CSS preview/test-frame -> publish), Presets, Fonts & Brand Kits UI (`admin/AdminTemplatesView.tsx`, `admin/AdminAssetsViews.tsx`) (`17` Vitest tests passed, `103.58 kB` gzipped JS).
