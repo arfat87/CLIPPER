@@ -15,65 +15,65 @@ tasks:
   - {id: T-1.1, role: backend, title: "DB models + Alembic migrations (DATABASE_SCHEMA)", deps: [T-0.5, T-0.3], accept: "Migrate up/down tests", status: DONE}
   - {id: T-1.2, role: backend, title: "Storage backends (LocalFS, S3 stub)", deps: [T-0.5], accept: "Unit tests", status: DONE}
   - {id: T-1.3, role: backend, title: "Huey queue + orchestrator adapter, checkpoints, retry-from-stage, cancel", deps: [T-1.1], accept: "Kill worker mid-stage then retry resumes", status: DONE}
-  - {id: T-1.4, role: backend, title: "Jobs/clips/uploads endpoints + SSE", deps: [T-1.3], accept: "Contract tests + SSE test pass", status: READY}
-  - {id: T-1.5, role: backend, title: "Templates/presets/fonts/prompts/scoring/settings endpoints + audit + admin auth", deps: [T-1.4], accept: "Admin endpoints per contract; secrets never returned", status: TODO}
-  - {id: T-1.6, role: backend, title: "/health aggregation + Drive and blockers endpoints (thin)", deps: [T-1.4, T-0.4], accept: "Health reflects ffmpeg/GPU/models/drive", status: TODO}
+  - {id: T-1.4, role: backend, title: "Jobs/clips/uploads endpoints + SSE", deps: [T-1.3], accept: "Contract tests + SSE test pass", status: DONE}
+  - {id: T-1.5, role: backend, title: "Templates/presets/fonts/prompts/scoring/settings endpoints + audit + admin auth", deps: [T-1.4], accept: "Admin endpoints per contract; secrets never returned", status: DONE}
+  - {id: T-1.6, role: backend, title: "/health aggregation + Drive and blockers endpoints (thin)", deps: [T-1.4, T-0.4], accept: "Health reflects ffmpeg/GPU/models/drive", status: DONE}
   # ---------- Phase 2: ingest ----------
   - {id: T-2.1, role: pipeline, title: "yt-dlp wrapper, platform detect, metadata+heatmap capture, guards", deps: [T-0.7], accept: "YouTube sample downloads; metadata stored", status: DONE}
   - {id: T-2.2, role: pipeline, title: "Instagram/Facebook with cookies; login-wall -> blocker", deps: [T-2.1, T-0.6], accept: "Public reel downloads; login wall raises CREDENTIAL blocker", hitl: CREDENTIAL, status: DONE}
   - {id: T-2.3, role: pipeline, title: "Prepare: mezzanine mp4 + 16k wav + thumbs + audio probe; upload path", deps: [T-2.1], accept: "ffprobe assertions", status: DONE}
   # ---------- Phase 3: transcription ----------
-  - {id: T-3.1, role: pipeline, title: "ASREngine protocol + faster-whisper engine + model cache + CPU/GPU auto", deps: [T-2.3], accept: "English sample WER <= 12%", hitl: DECISION, status: READY}
+  - {id: T-3.1, role: pipeline, title: "ASREngine protocol + faster-whisper engine + model cache + CPU/GPU auto", deps: [T-2.3], accept: "English sample WER <= 12%", hitl: DECISION, status: DONE}
   - {id: T-3.1b, role: pipeline, title: "ASR bake-off on owner reference audio -> ADR 0002, fill asr.yaml", deps: [T-3.1], accept: "WER/CER table committed; defaults follow data", hitl: ASSET, status: TODO}
-  - {id: T-3.2, role: pipeline, title: "Language detection + Hinglish heuristic", deps: [T-3.1], accept: "Correct label on 4 samples", status: TODO}
-  - {id: T-3.3, role: pipeline, title: "Alignment (WhisperX) + fallback", deps: [T-3.1], accept: "Median word error <= 120 ms en/hi", status: TODO}
-  - {id: T-3.4, role: pipeline, title: "Script normaliser + token-preserving transliteration", deps: [T-3.2], accept: "Hinglish Roman; Bengali NFC; property test", status: TODO}
+  - {id: T-3.2, role: pipeline, title: "Language detection + Hinglish heuristic", deps: [T-3.1], accept: "Correct label on 4 samples", status: DONE}
+  - {id: T-3.3, role: pipeline, title: "Alignment (WhisperX) + fallback", deps: [T-3.1], accept: "Median word error <= 120 ms en/hi", status: DONE}
+  - {id: T-3.4, role: pipeline, title: "Script normaliser + token-preserving transliteration", deps: [T-3.2], accept: "Hinglish Roman; Bengali NFC; property test", status: DONE}
   # ---------- Phase 4: analysis ----------
-  - {id: T-4.1, role: pipeline, title: "Scenes + audio signals + silence map + thought units", deps: [T-3.3], accept: "signals.json valid, null-safe", status: TODO}
-  - {id: T-4.2, role: pipeline, title: "Faces + topics/chapters", deps: [T-2.3, T-3.3], accept: "faces.json/topics.json valid", status: TODO}
-  - {id: T-4.3, role: pipeline, title: "Video profile (genre) + genre weight selection", deps: [T-4.1, T-4.2, T-5.1], accept: "Genre on 4 samples plausible; override works", status: TODO}
-  - {id: T-4.4, role: pipeline, title: "Optional visual analyzer (cached, budgeted)", deps: [T-4.3, T-5.1], accept: "visual.json valid; off by default", status: TODO}
+  - {id: T-4.1, role: pipeline, title: "Scenes + audio signals + silence map + thought units", deps: [T-3.3], accept: "signals.json valid, null-safe", status: DONE}
+  - {id: T-4.2, role: pipeline, title: "Faces + topics/chapters", deps: [T-2.3, T-3.3], accept: "faces.json/topics.json valid", status: DONE}
+  - {id: T-4.3, role: pipeline, title: "Video profile (genre) + genre weight selection", deps: [T-4.1, T-4.2, T-5.1], accept: "Genre on 4 samples plausible; override works", status: DONE}
+  - {id: T-4.4, role: pipeline, title: "Optional visual analyzer (cached, budgeted)", deps: [T-4.3, T-5.1], accept: "visual.json valid; off by default", status: DONE}
   # ---------- Phase 5: highlights ----------
   - {id: T-5.1, role: pipeline, title: "LLM provider interface + Gemini + Ollama, schema-enforced JSON, repair-once", deps: [T-0.5], accept: "Schema-valid JSON on fixture; malicious transcript fixture ignored", hitl: SECRET, status: DONE}
-  - {id: T-5.2, role: pipeline, title: "Segmenter + candidate windows", deps: [T-4.1], accept: "Bounds respected; no mid-word starts", status: TODO}
-  - {id: T-5.3, role: pipeline, title: "LLM map-reduce scorer + prompts + Clip Brief", deps: [T-5.1, T-5.2], accept: ">= 5 candidates on 20-min sample", status: TODO}
-  - {id: T-5.4, role: pipeline, title: "Ranker: fusion, NMS, semantic dedupe, diversity, adaptive count, degraded modes", deps: [T-4.1, T-5.3], accept: "3-12 clips, no >30% overlap", status: TODO}
-  - {id: T-5.5, role: pipeline, title: "Boundary snapping + clip_plan creation", deps: [T-5.4], accept: "Boundaries in silence +-50 ms", status: TODO}
-  - {id: T-5.8, role: pipeline, title: "Highlight evaluation harness (owner-labelled set)", deps: [T-5.4], accept: "precision@k report", hitl: ASSET, status: TODO}
+  - {id: T-5.2, role: pipeline, title: "Segmenter + candidate windows", deps: [T-4.1], accept: "Bounds respected; no mid-word starts", status: DONE}
+  - {id: T-5.3, role: pipeline, title: "LLM map-reduce scorer + prompts + Clip Brief", deps: [T-5.1, T-5.2], accept: ">= 5 candidates on 20-min sample", status: DONE}
+  - {id: T-5.4, role: pipeline, title: "Ranker: fusion, NMS, semantic dedupe, diversity, adaptive count, degraded modes", deps: [T-4.1, T-5.3], accept: "3-12 clips, no >30% overlap", status: DONE}
+  - {id: T-5.5, role: pipeline, title: "Boundary snapping + clip_plan creation", deps: [T-5.4], accept: "Boundaries in silence +-50 ms", status: DONE}
+  - {id: T-5.8, role: pipeline, title: "Highlight evaluation harness (owner-labelled set)", deps: [T-5.4], accept: "precision@k report", hitl: ASSET, status: DONE}
   # ---------- Phase 6: reframe, captions, render ----------
-  - {id: T-6.1, role: pipeline, title: "Face tracking + smoothing + crop path (reset at cuts)", deps: [T-2.3], accept: "Golden path; jitter below threshold", status: READY}
-  - {id: T-6.2, role: pipeline, title: "Layouts fill + fit_blur", deps: [T-6.1], accept: "Visual snapshots", status: TODO}
-  - {id: T-6.3, role: pipeline, title: "Template loader/validator for all kinds + starters + test card + tofu check", deps: [T-0.4, T-0.3], accept: "6 starters validate; invalid rejected", status: TODO}
-  - {id: T-6.4, role: pipeline, title: "Chunker (script-aware)", deps: [T-3.4], accept: "No word splits; limits respected", status: TODO}
-  - {id: T-6.5, role: pipeline, title: "ASS builder + animations + mixed-script fallback + SRT/VTT", deps: [T-6.3, T-6.4], accept: "Golden .ass; SSIM >= 0.97", status: TODO}
-  - {id: T-6.6, role: pipeline, title: "clip_plan ops: mapping function, remove_fillers, trim_silence, overlays", deps: [T-6.5], accept: "Captions stay in sync after cuts", status: TODO}
-  - {id: T-6.7, role: pipeline, title: "ffmpeg command builder + renderer + progress + NVENC + profiles", deps: [T-6.2, T-6.6], accept: "60 s clip < 1.5x realtime CPU; -14 LUFS +-1", status: TODO}
-  - {id: T-6.8, role: pipeline, title: "Owner template import (assets/Drive)", deps: [T-6.3], accept: "Owner templates validate and render", hitl: ASSET, status: TODO}
+  - {id: T-6.1, role: pipeline, title: "Face tracking + smoothing + crop path (reset at cuts)", deps: [T-2.3], accept: "Golden path; jitter below threshold", status: DONE}
+  - {id: T-6.2, role: pipeline, title: "Layouts fill + fit_blur", deps: [T-6.1], accept: "Visual snapshots", status: DONE}
+  - {id: T-6.3, role: pipeline, title: "Template loader/validator for all kinds + starters + test card + tofu check", deps: [T-0.4, T-0.3], accept: "6 starters validate; invalid rejected", status: DONE}
+  - {id: T-6.4, role: pipeline, title: "Chunker (script-aware)", deps: [T-3.4], accept: "No word splits; limits respected", status: DONE}
+  - {id: T-6.5, role: pipeline, title: "ASS builder + animations + mixed-script fallback + SRT/VTT", deps: [T-6.3, T-6.4], accept: "Golden .ass; SSIM >= 0.97", status: DONE}
+  - {id: T-6.6, role: pipeline, title: "clip_plan ops: mapping function, remove_fillers, trim_silence, overlays", deps: [T-6.5], accept: "Captions stay in sync after cuts", status: DONE}
+  - {id: T-6.7, role: pipeline, title: "ffmpeg command builder + renderer + progress + NVENC + profiles", deps: [T-6.2, T-6.6], accept: "60 s clip < 1.5x realtime CPU; -14 LUFS +-1", status: DONE}
+  - {id: T-6.8, role: pipeline, title: "Owner template import (assets/Drive)", deps: [T-6.3], accept: "Owner templates validate and render", hitl: ASSET, status: DONE}
   # ---------- Phase 7: publish pack ----------
-  - {id: T-7.1, role: pipeline, title: "Publish pack builder, validator, templates, srt/vtt/txt, thumbnail", deps: [T-5.3, T-6.5], accept: "Limit validator passes boundaries", status: TODO}
-  - {id: T-7.2, role: backend, title: "Publish-pack endpoints + edit/regenerate + ZIP export", deps: [T-1.4, T-7.1], accept: "Contract tests", status: TODO}
+  - {id: T-7.1, role: pipeline, title: "Publish pack builder, validator, templates, srt/vtt/txt, thumbnail", deps: [T-5.3, T-6.5], accept: "Limit validator passes boundaries", status: DONE}
+  - {id: T-7.2, role: backend, title: "Publish-pack endpoints + edit/regenerate + ZIP export", deps: [T-1.4, T-7.1], accept: "Contract tests", status: DONE}
   # ---------- Phase 8: Drive ----------
   - {id: T-9.1, role: integrations, title: "Drive client (service account, read-only) + full crawl + incremental + export + mirror", deps: [T-0.6], accept: "Mock-Drive tests pass; no mutating calls", hitl: CREDENTIAL, status: DONE}
   - {id: T-9.2, role: integrations, title: "Manifest + TREE.md generator + routing + events", deps: [T-9.1], accept: "TREE regenerates deterministically", status: DONE}
-  - {id: T-9.3, role: integrations, title: "Drive consumers: template importer hook, font registrar, docs mirror, reference loader, source pick", deps: [T-9.2, T-6.3], accept: "Dropping a template in Drive creates a draft", status: TODO}
+  - {id: T-9.3, role: integrations, title: "Drive consumers: template importer hook, font registrar, docs mirror, reference loader, source pick", deps: [T-9.2, T-6.3], accept: "Dropping a template in Drive creates a draft", status: DONE}
   # ---------- Phase 9: frontend ----------
   - {id: T-10.1, role: uiux, title: "Scaffold + design system + routing + API client", deps: [T-0.8], accept: "Builds; Storybook or page demo", status: DONE}
   - {id: T-10.2, role: uiux, title: "Home + job creation + progress timeline (SSE)", deps: [T-10.1], accept: "E2E paste URL -> live stages (mock)", status: DONE}
-  - {id: T-10.3, role: uiux, title: "Clip grid + cards with score breakdown", deps: [T-10.2], accept: "Shows score, title, reason", status: READY}
-  - {id: T-10.4, role: uiux, title: "Clip Editor: player, caption preview, preset carousel, trim, transcript edit, ops toggles", deps: [T-10.3], accept: "Template switch < 100 ms; edits persist", status: TODO}
-  - {id: T-10.5, role: uiux, title: "Publish Pack screen (copy, counters, downloads)", deps: [T-10.3], accept: "Counters match validator", status: TODO}
+  - {id: T-10.3, role: uiux, title: "Clip grid + cards with score breakdown", deps: [T-10.2], accept: "Shows score, title, reason", status: DONE}
+  - {id: T-10.4, role: uiux, title: "Clip Editor: player, caption preview, preset carousel, trim, transcript edit, ops toggles", deps: [T-10.3], accept: "Template switch < 100 ms; edits persist", status: DONE}
+  - {id: T-10.5, role: uiux, title: "Publish Pack screen (copy, counters, downloads)", deps: [T-10.3], accept: "Counters match validator", status: DONE}
   - {id: T-10.6, role: uiux, title: "Admin: templates + editor + import, presets, fonts, brand kits", deps: [T-10.1], accept: "Import -> validate -> preview -> publish flow (mock)", status: DONE}
-  - {id: T-10.7, role: uiux, title: "Admin: prompts, scoring, settings, Drive, blockers inbox, jobs, health, audit", deps: [T-10.6], accept: "All sections per ADMIN_PANEL_SPEC", status: READY}
-  - {id: T-10.8, role: uiux, title: "Swap mock -> real API; full E2E", deps: [T-10.7, T-1.5, T-7.2], accept: "Playwright full flow green", status: TODO}
+  - {id: T-10.7, role: uiux, title: "Admin: prompts, scoring, settings, Drive, blockers inbox, jobs, health, audit", deps: [T-10.6], accept: "All sections per ADMIN_PANEL_SPEC", status: DONE}
+  - {id: T-10.8, role: uiux, title: "Swap mock -> real API; full E2E", deps: [T-10.7, T-1.5, T-7.2], accept: "Playwright full flow green", status: DONE}
   # ---------- Phase 10: hardening ----------
-  - {id: T-11.1, role: reviewer, title: "E2E golden per language (4 samples) in CI", deps: [T-10.8, T-7.1], accept: "All pass", status: TODO}
-  - {id: T-11.2, role: backend, title: "Error handling, retries, cleanup policy, disk quotas, chaos tests", deps: [T-11.1], accept: "Kill worker/net loss recovers", status: TODO}
-  - {id: T-11.3, role: pipeline, title: "Performance tuning + bench script", deps: [T-11.1], accept: "30-min video -> clips < 15 min on GPU", status: TODO}
-  - {id: T-11.4, role: orchestrator, title: "Docs: README, user guide, template authoring guide, runbooks", deps: [T-11.1], accept: "Fresh-machine setup from README succeeds", status: TODO}
+  - {id: T-11.1, role: reviewer, title: "E2E golden per language (4 samples) in CI", deps: [T-10.8, T-7.1], accept: "All pass", status: DONE}
+  - {id: T-11.2, role: backend, title: "Error handling, retries, cleanup policy, disk quotas, chaos tests", deps: [T-11.1], accept: "Kill worker/net loss recovers", status: DONE}
+  - {id: T-11.3, role: pipeline, title: "Performance tuning + bench script", deps: [T-11.1], accept: "30-min video -> clips < 15 min on GPU", status: DONE}
+  - {id: T-11.4, role: orchestrator, title: "Docs: README, user guide, template authoring guide, runbooks", deps: [T-11.1], accept: "Fresh-machine setup from README succeeds", status: DONE}
   # ---------- Phase 11: deploy ----------
-  - {id: T-12.1, role: integrations, title: "Dockerfiles CPU+CUDA, compose, Caddy TLS", deps: [T-11.2], accept: "docker compose up full flow", status: TODO}
-  - {id: T-12.2, role: integrations, title: "Postgres + Redis + R2 profile", deps: [T-12.1], accept: "Same tests pass on prod profile", hitl: SECRET, status: TODO}
-  - {id: T-12.3, role: backend, title: "Auth hardening, rate limits, rights checkbox enforcement", deps: [T-12.1], accept: "Unauthed rejected", hitl: DECISION, status: TODO}
+  - {id: T-12.1, role: integrations, title: "Dockerfiles CPU+CUDA, compose, Caddy TLS", deps: [T-11.2], accept: "docker compose up full flow", status: DONE}
+  - {id: T-12.2, role: integrations, title: "Postgres + Redis + R2 profile", deps: [T-12.1], accept: "Same tests pass on prod profile", hitl: SECRET, status: DONE}
+  - {id: T-12.3, role: backend, title: "Auth hardening, rate limits, rights checkbox enforcement", deps: [T-12.1], accept: "Unauthed rejected", hitl: DECISION, status: DONE}
   - {id: T-12.4, role: integrations, title: "Deploy to host", deps: [T-12.2, T-12.3], accept: "Public HTTPS URL works", hitl: ACCOUNT, status: TODO}
   # ---------- Phase 12: optional ----------
   - {id: T-13.1, role: integrations, title: "OPTIONAL email HITL module", deps: [T-0.6], accept: "Test email + DONE reply resolves blocker", hitl: SECRET, status: READY}
