@@ -33,7 +33,12 @@ class Settings(BaseSettings):
     queue_mode: str = "immediate"  # immediate | huey_sqlite | huey_redis
     queue_url: str = f"sqlite:///{ROOT_DIR / 'data' / 'huey.db'}"
     redis_url: str = "redis://localhost:6379/0"
-    storage_backend: str = "local"  # local | s3
+    storage_backend: str = "local"  # local | s3 | r2
+    s3_endpoint: str = ""
+    s3_bucket: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_region: str = "auto"
 
     admin_enabled: bool = True
     admin_password_hash: str = ""
