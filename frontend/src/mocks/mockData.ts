@@ -162,6 +162,108 @@ export const mockDriveStatus: DriveStatus = {
   },
 };
 
+export const mockDriveFiles: Array<Record<string, unknown>> = [
+  {
+    id: "drv_src_01",
+    name: "founder_podcast_ep42_hinglish.mp4",
+    route: "source",
+    size_mb: 248,
+    duration_s: 1840,
+    synced_at: "2026-11-18T13:15:00Z",
+  },
+  {
+    id: "drv_src_02",
+    name: "bangla_creator_talk_1080p.mp4",
+    route: "source",
+    size_mb: 164,
+    duration_s: 920,
+    synced_at: "2026-11-18T12:40:00Z",
+  },
+  {
+    id: "drv_src_03",
+    name: "hindi_fintech_keynote.mkv",
+    route: "source",
+    size_mb: 412,
+    duration_s: 2310,
+    synced_at: "2026-11-17T18:10:00Z",
+  },
+  {
+    id: "drv_tpl_01",
+    name: "creator_neon_box.cliptpl.zip",
+    route: "template",
+    size_mb: 1.4,
+    synced_at: "2026-11-18T11:00:00Z",
+  },
+];
+
+export const mockFonts: Array<Record<string, unknown>> = [
+  {
+    id: "font_montserrat",
+    family: "Montserrat",
+    filename: "Montserrat-ExtraBold.ttf",
+    weight: 800,
+    license: "OFL-1.1",
+    license_ok: true,
+    coverage: { latn: true, deva: false, beng: false },
+    is_default_fallback: true,
+    fallback_scripts: ["latn"],
+  },
+  {
+    id: "font_mukta",
+    family: "Mukta",
+    filename: "Mukta-ExtraBold.ttf",
+    weight: 800,
+    license: "OFL-1.1",
+    license_ok: true,
+    coverage: { latn: true, deva: true, beng: false },
+    is_default_fallback: true,
+    fallback_scripts: ["deva"],
+  },
+  {
+    id: "font_hind_siliguri",
+    family: "Hind Siliguri",
+    filename: "HindSiliguri-Bold.ttf",
+    weight: 700,
+    license: "OFL-1.1",
+    license_ok: true,
+    coverage: { latn: true, deva: false, beng: true },
+    is_default_fallback: true,
+    fallback_scripts: ["beng"],
+  },
+  {
+    id: "font_custom_display",
+    family: "DesiDisplay",
+    filename: "DesiDisplay-Black.otf",
+    weight: 900,
+    license: "UNKNOWN",
+    license_ok: false,
+    coverage: { latn: true, deva: true, beng: false },
+    is_default_fallback: false,
+    fallback_scripts: [],
+  },
+];
+
+export const mockBrandKits: Array<Record<string, unknown>> = [
+  {
+    id: "creator_gold",
+    name: "Creator Gold Studio",
+    primary_color: "#FFD400",
+    accent_color: "#0B0D10",
+    watermark_text: "@arfat.clips",
+    logo_asset: "creator_gold_logo.png",
+    default_preset_id: "hindi_motivation",
+  },
+  {
+    id: "bangla_tech_kit",
+    name: "Bangla Tech Kit",
+    primary_color: "#3DDC84",
+    accent_color: "#141820",
+    watermark_text: "@banglatech",
+    logo_asset: "bangla_tech_mark.svg",
+    default_preset_id: "bengali_tech",
+  },
+];
+
 export const mockClipsById: Record<string, ClipDetail> = {
   clip_01: {
     id: "clip_01",
@@ -199,7 +301,7 @@ export const mockClipsById: Record<string, ClipDetail> = {
       overlays: { hook_title: true, progress_bar: true },
       caption_preview_lines: [
         "90% startups yahi",
-        "GALTII karte hain",
+        "GALTI karte hain",
         "first 6 months mein",
       ],
     },
@@ -366,8 +468,8 @@ export const initialMockJobs: JobDetail[] = [
     language: "bn",
     script: "beng",
     genre: "tutorial",
-    status: "RENDERING",
-    stage: "render",
+    status: "COMPLETED",
+    stage: "package",
     error_code: null,
     error_message: null,
     auto_mode: true,
@@ -379,8 +481,8 @@ export const initialMockJobs: JobDetail[] = [
       { stage: "transcribe", status: "DONE", attempt: 1 },
       { stage: "analyze", status: "DONE", attempt: 1 },
       { stage: "select", status: "DONE", attempt: 1 },
-      { stage: "render", status: "RUNNING", attempt: 1 },
-      { stage: "package", status: "PENDING", attempt: 0 },
+      { stage: "render", status: "DONE", attempt: 1 },
+      { stage: "package", status: "DONE", attempt: 1 },
     ],
     clips: [
       {
@@ -396,7 +498,7 @@ export const initialMockJobs: JobDetail[] = [
         hook_line: mockClipsById.clip_03!.hook_line,
         layout: "fit_blur",
         preset_id: "bengali_tech",
-        status: "RENDERING",
+        status: "READY",
         feedback: null,
         actual_views: null,
       },
@@ -416,7 +518,8 @@ export const mockAdminBlockers: Blocker[] = [
     title: "Gemini API Key (optional cloud LLM fallback)",
     payload: {
       env_key: "GEMINI_API_KEY",
-      instructions: "Add GEMINI_API_KEY to .env or select local Ollama provider.",
+      instructions:
+        "Add GEMINI_API_KEY to .env or select local Ollama provider.",
     },
     created_at: "2026-11-18T10:15:00Z",
     resolved_at: null,
@@ -466,4 +569,3 @@ export const mockAdminAudit: Array<Record<string, unknown>> = [
     timestamp: "2026-11-18T09:20:00Z",
   },
 ];
-

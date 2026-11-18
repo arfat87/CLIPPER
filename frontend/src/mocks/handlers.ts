@@ -2,33 +2,100 @@ import { delay, http, HttpResponse } from "msw";
 import type {
   AdminAuditResponse,
   AdminBlockersResponse,
+  AdminBrandKitsResponse,
+  AdminFontsResponse,
+  AdminPresetsResponse,
   AdminTemplatesResponse,
   ClipDetail,
   CreateJobRequest,
+  DriveFilesResponse,
   ErrorEnvelope,
   JobDetail,
+  JobStatus,
   PaginatedJobs,
+  Preset,
   PresetListResponse,
+  StageName,
   TemplateListResponse,
+  TemplateSummary,
+  UploadSession,
 } from "../api/types";
 import {
   initialMockJobs,
   mockAdminAudit,
   mockAdminBlockers,
   mockAdminSettings,
+  mockBrandKits,
   mockClipsById,
+  mockDriveFiles,
   mockDriveStatus,
+  mockFonts,
   mockHealth,
   mockPresets,
   mockTemplates,
 } from "./mockData";
 
+const PIPELINE_STAGES: Array<{ stage: StageName; status: JobStatus; label: string }> = [
+  { stage: "fetch", status: "FETCHING", label: "Downloading video & metadata" },
+  { stage: "prepare", status: "PREPARING", label: "Normalizing 16kHz WAV & probing streams" },
+  { stage: "transcribe", status: "TRANSCRIBING", label: "Transcribing speech with word timestamps" },
+  { stage: "analyze", status: "ANALYZING", label: "Scoring hooks, audio peaks & highlights" },
+  { stage: "select", status: "SELECTING", label: "Selecting top non-overlapping clips" },
+  { stage: "render", status: "RENDERING", label: "Burning Indic captions via FFmpeg + libass" },
+  { stage: "package", status: "PACKAGING", label: "Generating Publish Pack & sidecars" },
+];
+
 let jobsStore: JobDetail[] = structuredClone(initialMockJobs);
 let clipsStore: Record<string, ClipDetail> = structuredClone(mockClipsById);
+let templatesStore: TemplateSummary[] = structuredClone(mockTemplates);
+let presetsStore: Preset[] = structuredClone(mockPresets);
+let fontsStore: Array<Record<string, unknown>> = structuredClone(mockFonts);
+let brandKitsStore: Array<Record<string, unknown>> = structuredClone(mockBrandKits);
+let auditStore: Array<Record<string, unknown>> = structuredClone(mockAdminAudit);
+let uploadSessionsStore: Record<string, UploadSession> = {};
+let jobPendingClipsStore: Record<string, ClipDetail[]> = {};
+let sseStepDelayMs = import.meta.env?.MODE === "test" ? 20 : 450;
+
+export function setMockSseStepDelayMs(ms: number): void {
+  sseStepDelayMs = ms;
+}
 
 export function resetMockStore(): void {
   jobsStore = structuredClone(initialMockJobs);
   clipsStore = structuredClone(mockClipsById);
+  templatesStore = structuredClone(mockTemplates);
+  presetsStore = structuredClone(mockPresets);
+  fontsStore = structuredClone(mockFonts);
+  brandKitsStore = structuredClone(mockBrandKits);
+  auditStore = structuredClone(mockAdminAudit);
+  uploadSessionsStore = {};
+  jobPendingClipsStore = {};
+}
+
+export function setMockJobFailure(
+  jobId: string,
+  errorCode: string,
+  errorMessage: string,
+  failedStage: StageName = "fetch"
+): void {
+  jobsStore = jobsStore.map((job) => {
+    if (job.id !== jobId) return job;
+    let passedFailed = false;
+    return {
+      ...job,
+      status: "FAILED",
+      stage: failedStage,
+      error_code: errorCode,
+      error_message: errorMessage,
+      stages: (job.stages ?? []).map((st) => {
+        if (st.stage === failedStage) {
+          passedFailed = true;
+          return { ...st, status: "FAILED" };
+        }
+        return { ...st, status: passedFailed ? "PENDING" : "DONE" };
+      }),
+    };
+  });
 }
 
 function getMockMode(request: Request): string | null {
@@ -49,6 +116,19 @@ function makeError(
     },
   };
   return HttpResponse.json(payload, { status });
+}
+
+function appendAudit(action: string, target: string): void {
+  auditStore = [
+    {
+      id: `aud_${Date.now().toString(36)}`,
+      actor: "owner",
+      action,
+      target,
+      timestamp: new Date().toISOString(),
+    },
+    ...auditStore,
+  ];
 }
 
 export const handlers = [
@@ -93,7 +173,7 @@ export const handlers = [
 
   http.post("/api/v1/jobs", async ({ request }) => {
     const body = (await request.json()) as CreateJobRequest;
-    await delay(100);
+    await delay(40);
 
     if (!body.rights_confirmed) {
       return makeError(
@@ -105,18 +185,19 @@ export const handlers = [
     }
 
     const now = new Date().toISOString();
-    const id = `job_${Date.now().toString(36)}`;
-    const clipId = `clip_${Date.now().toString(36)}`;
+    const id = `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
+    const clipId = `clip_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
 
     const platform =
       body.source.kind === "url"
         ? body.source.url?.includes("instagram")
           ? "instagram"
-          : body.source.url?.includes("facebook")
+          : body.source.url?.includes("facebook") || body.source.url?.includes("fb.watch")
             ? "facebook"
             : "youtube"
         : body.source.kind;
 
+    const clipTitle = body.clip_brief?.trim() || "Top Viral Hook Extracted";
     const newClip: ClipDetail = {
       id: clipId,
       job_id: id,
@@ -125,7 +206,7 @@ export const handlers = [
       end_s: 48.0,
       score: 0.89,
       score_mode: "hybrid",
-      title: body.clip_brief?.trim() || "Top Viral Hook Extracted",
+      title: clipTitle,
       reason: "Matched strong opening hook and clear vocal cadence.",
       hook_line: "Yeh 30 second miss mat karna!",
       layout: "fill",
@@ -158,34 +239,32 @@ export const handlers = [
       source_ref: body.source.drive_file_id ?? body.source.upload_id ?? null,
       platform,
       title:
-        body.source.url?.replace(/^https?:\/\//, "").slice(0, 48) ??
+        body.clip_brief?.trim() ||
+        body.source.url?.replace(/^https?:\/\//, "").slice(0, 48) ||
         "Uploaded Creator Video",
       duration_s: 620,
       language: body.language ?? "auto",
       script: body.script_pref ?? "auto",
       genre: "creator",
-      status: "COMPLETED",
-      stage: "package",
+      status: "QUEUED",
+      stage: "fetch",
       error_code: null,
       error_message: null,
       auto_mode: body.auto_mode ?? true,
       preset_id: body.preset_id ?? "default",
       warnings: [],
-      stages: [
-        { stage: "fetch", status: "DONE", attempt: 1 },
-        { stage: "prepare", status: "DONE", attempt: 1 },
-        { stage: "transcribe", status: "DONE", attempt: 1 },
-        { stage: "analyze", status: "DONE", attempt: 1 },
-        { stage: "select", status: "DONE", attempt: 1 },
-        { stage: "render", status: "DONE", attempt: 1 },
-        { stage: "package", status: "DONE", attempt: 1 },
-      ],
-      clips: [newClip],
+      stages: PIPELINE_STAGES.map((s) => ({
+        stage: s.stage,
+        status: "PENDING",
+        attempt: 1,
+      })),
+      clips: [],
       created_at: now,
       updated_at: now,
     };
 
     clipsStore[clipId] = newClip;
+    jobPendingClipsStore[id] = [newClip];
     jobsStore = [newJob, ...jobsStore];
     return HttpResponse.json(newJob, { status: 201 });
   }),
@@ -207,6 +286,272 @@ export const handlers = [
     }
     jobsStore = jobsStore.filter((j) => j.id !== id);
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post("/api/v1/jobs/:id/cancel", ({ params }) => {
+    const id = String(params.id);
+    const existing = jobsStore.find((j) => j.id === id);
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Job '${id}' was not found.`, 404, false);
+    }
+    const updated: JobDetail = {
+      ...existing,
+      status: "CANCELLED",
+      updated_at: new Date().toISOString(),
+    };
+    jobsStore = jobsStore.map((j) => (j.id === id ? updated : j));
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/jobs/:id/retry", async ({ params, request }) => {
+    const id = String(params.id);
+    const existing = jobsStore.find((j) => j.id === id);
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Job '${id}' was not found.`, 404, false);
+    }
+    const body = (await request.json().catch(() => ({}))) as {
+      from_stage?: StageName;
+    };
+    const fromStage = body.from_stage ?? "fetch";
+    const startIdx = Math.max(
+      0,
+      PIPELINE_STAGES.findIndex((s) => s.stage === fromStage)
+    );
+    const targetStage = PIPELINE_STAGES[startIdx]!;
+
+    const updated: JobDetail = {
+      ...existing,
+      status: targetStage.status,
+      stage: targetStage.stage,
+      error_code: null,
+      error_message: null,
+      stages: PIPELINE_STAGES.map((s, idx) => ({
+        stage: s.stage,
+        status: idx < startIdx ? "DONE" : idx === startIdx ? "RUNNING" : "PENDING",
+        attempt: (existing.stages?.[idx]?.attempt ?? 1) + (idx >= startIdx ? 1 : 0),
+      })),
+      updated_at: new Date().toISOString(),
+    };
+    jobsStore = jobsStore.map((j) => (j.id === id ? updated : j));
+    return HttpResponse.json(updated, { status: 202 });
+  }),
+
+  http.get("/api/v1/jobs/:id/events", ({ params, request }) => {
+    const id = String(params.id);
+    const url = new URL(request.url);
+    const lastEventIdRaw =
+      request.headers.get("Last-Event-ID") ??
+      url.searchParams.get("last_event_id");
+    const lastEventIdx = lastEventIdRaw ? Number(lastEventIdRaw) : 0;
+
+    const job = jobsStore.find((j) => j.id === id);
+    if (!job) {
+      return makeError("VALIDATION_ERROR", `Job '${id}' was not found.`, 404, false);
+    }
+
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const pushFrame = (
+          frameId: number,
+          event: string,
+          data: Record<string, unknown>
+        ) => {
+          if (frameId <= lastEventIdx) {
+            return;
+          }
+          const payload = `id: ${frameId}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+          controller.enqueue(encoder.encode(payload));
+        };
+
+        const currentJob = jobsStore.find((j) => j.id === id);
+        if (
+          !currentJob ||
+          currentJob.status === "COMPLETED" ||
+          currentJob.status === "FAILED" ||
+          currentJob.status === "CANCELLED"
+        ) {
+          pushFrame(999, "done", {
+            job_id: id,
+            status: currentJob?.status ?? "COMPLETED",
+          });
+          controller.close();
+          return;
+        }
+
+        const startStageIdx = Math.max(
+          0,
+          (currentJob.stages ?? []).findIndex((st) => st.status !== "DONE")
+        );
+
+        let seq = 1;
+        for (let i = startStageIdx; i < PIPELINE_STAGES.length; i++) {
+          const latest = jobsStore.find((j) => j.id === id);
+          if (!latest || latest.status === "CANCELLED" || latest.status === "FAILED") {
+            pushFrame(seq++, "state", {
+              job_id: id,
+              status: latest?.status ?? "CANCELLED",
+              stage: latest?.stage ?? null,
+            });
+            pushFrame(seq++, "done", {
+              job_id: id,
+              status: latest?.status ?? "CANCELLED",
+            });
+            controller.close();
+            return;
+          }
+
+          const step = PIPELINE_STAGES[i]!;
+          const etaRemaining = (PIPELINE_STAGES.length - 1 - i) * 4;
+
+          jobsStore = jobsStore.map((j) =>
+            j.id === id
+              ? {
+                  ...j,
+                  status: step.status,
+                  stage: step.stage,
+                  stages: PIPELINE_STAGES.map((s, idx) => ({
+                    stage: s.stage,
+                    status: idx < i ? "DONE" : idx === i ? "RUNNING" : "PENDING",
+                    attempt: 1,
+                  })),
+                }
+              : j
+          );
+
+          pushFrame(seq++, "state", {
+            job_id: id,
+            status: step.status,
+            stage: step.stage,
+          });
+          pushFrame(seq++, "progress", {
+            job_id: id,
+            stage: step.stage,
+            status: "RUNNING",
+            pct: 55,
+            message: step.label,
+            eta_s: etaRemaining,
+          });
+
+          await delay(sseStepDelayMs);
+
+          const postStep = jobsStore.find((j) => j.id === id);
+          if (!postStep || postStep.status === "CANCELLED") {
+            pushFrame(seq++, "state", {
+              job_id: id,
+              status: "CANCELLED",
+              stage: step.stage,
+            });
+            pushFrame(seq++, "done", { job_id: id, status: "CANCELLED" });
+            controller.close();
+            return;
+          }
+
+          if (step.stage === "analyze") {
+            pushFrame(seq++, "warning", {
+              job_id: id,
+              message: "Background music detected (-18 LUFS); vocal ducking applied.",
+            });
+          }
+
+          pushFrame(seq++, "progress", {
+            job_id: id,
+            stage: step.stage,
+            status: "DONE",
+            pct: 100,
+            message: `${step.stage} complete`,
+            eta_s: Math.max(0, etaRemaining - 3),
+          });
+        }
+
+        const pendingClips = jobPendingClipsStore[id] ?? [];
+        jobsStore = jobsStore.map((j) =>
+          j.id === id
+            ? {
+                ...j,
+                status: "COMPLETED",
+                stage: "package",
+                clips: j.clips && j.clips.length > 0 ? j.clips : pendingClips,
+                stages: PIPELINE_STAGES.map((s) => ({
+                  stage: s.stage,
+                  status: "DONE",
+                  attempt: 1,
+                })),
+                updated_at: new Date().toISOString(),
+              }
+            : j
+        );
+
+        pushFrame(seq++, "state", {
+          job_id: id,
+          status: "COMPLETED",
+          stage: "package",
+        });
+        pushFrame(seq++, "done", {
+          job_id: id,
+          status: "COMPLETED",
+        });
+        controller.close();
+      },
+    });
+
+    return new HttpResponse(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+      },
+    });
+  }),
+
+  http.post("/api/v1/uploads", async ({ request }) => {
+    const body = (await request.json()) as {
+      filename: string;
+      size_bytes: number;
+    };
+    const id = `upl_${Date.now().toString(36)}`;
+    const session: UploadSession = {
+      id,
+      filename: body.filename,
+      size_bytes: body.size_bytes,
+      received_chunks: 0,
+      status: "INIT",
+      upload_id: null,
+    };
+    uploadSessionsStore[id] = session;
+    return HttpResponse.json(session, { status: 201 });
+  }),
+
+  http.put("/api/v1/uploads/:id/chunk", ({ params, request }) => {
+    const id = String(params.id);
+    const session = uploadSessionsStore[id];
+    if (!session) {
+      return makeError("VALIDATION_ERROR", "Upload session not found.", 404, false);
+    }
+    const n = Number(new URL(request.url).searchParams.get("n") ?? "0");
+    const updated: UploadSession = {
+      ...session,
+      received_chunks: Math.max(session.received_chunks ?? 0, n + 1),
+      status: "UPLOADING",
+    };
+    uploadSessionsStore[id] = updated;
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/uploads/:id/complete", ({ params }) => {
+    const id = String(params.id);
+    const session = uploadSessionsStore[id];
+    if (!session) {
+      return makeError("VALIDATION_ERROR", "Upload session not found.", 404, false);
+    }
+    const updated: UploadSession = {
+      ...session,
+      status: "COMPLETED",
+      upload_id: `upload_${id}`,
+    };
+    uploadSessionsStore[id] = updated;
+    return HttpResponse.json(updated);
   }),
 
   http.get("/api/v1/clips/:id", ({ params, request }) => {
@@ -273,7 +618,7 @@ export const handlers = [
     const url = new URL(request.url);
     const kindFilter = url.searchParams.get("kind");
     const statusFilter = url.searchParams.get("status");
-    const items = mockTemplates.filter((tpl) => {
+    const items = templatesStore.filter((tpl) => {
       if (kindFilter && tpl.kind !== kindFilter) {
         return false;
       }
@@ -287,13 +632,41 @@ export const handlers = [
     return HttpResponse.json(payload);
   }),
 
+  http.post("/api/v1/templates/:id/preview", async ({ params, request }) => {
+    const id = String(params.id);
+    const body = (await request.json().catch(() => ({}))) as {
+      language?: string;
+      sample_text?: string;
+    };
+    const lang = body.language ?? "hinglish";
+    const sample =
+      body.sample_text ??
+      (lang === "hi"
+        ? "पहले ३ सेकंड में ध्यान खींचें"
+        : lang === "bn"
+          ? "এক ক্লিকেই ভিডিও ভাইরাল!"
+          : "90% startups yahi GALTI karte hain!");
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="640" viewBox="0 0 360 640">
+      <rect width="360" height="640" fill="#141820"/>
+      <rect x="24" y="90" width="312" height="390" fill="none" stroke="#3DDC84" stroke-dasharray="6 4"/>
+      <text x="180" y="60" fill="#9AA6B8" font-family="sans-serif" font-size="14" text-anchor="middle">libass test frame · ${id} (${lang})</text>
+      <text x="180" y="420" fill="#FFD400" stroke="#000000" stroke-width="2" font-family="sans-serif" font-weight="800" font-size="22" text-anchor="middle">${sample}</text>
+    </svg>`;
+
+    return new HttpResponse(svg, {
+      status: 200,
+      headers: { "Content-Type": "image/svg+xml" },
+    });
+  }),
+
   http.get("/api/v1/presets", ({ request }) => {
     const mode = getMockMode(request);
     if (mode === "empty") {
       const empty: PresetListResponse = { items: [] };
       return HttpResponse.json(empty);
     }
-    const payload: PresetListResponse = { items: mockPresets };
+    const payload: PresetListResponse = { items: presetsStore };
     return HttpResponse.json(payload);
   }),
 
@@ -309,14 +682,239 @@ export const handlers = [
     return HttpResponse.json(mockDriveStatus);
   }),
 
+  http.get("/api/v1/drive/files", ({ request }) => {
+    const route = new URL(request.url).searchParams.get("route");
+    const items = route
+      ? mockDriveFiles.filter((f) => f.route === route)
+      : mockDriveFiles;
+    const payload: DriveFilesResponse = { items };
+    return HttpResponse.json(payload);
+  }),
+
+  http.post("/api/v1/drive/pick", async ({ request }) => {
+    const body = (await request.json()) as { file_id: string };
+    return HttpResponse.json({
+      drive_file_id: body.file_id,
+      source_ref: `drive://sources/${body.file_id}`,
+    });
+  }),
+
   http.get("/api/v1/admin/templates", ({ request }) => {
     const mode = getMockMode(request);
     if (mode === "empty") {
       const empty: AdminTemplatesResponse = { items: [] };
       return HttpResponse.json(empty);
     }
-    const payload: AdminTemplatesResponse = { items: mockTemplates };
+    const payload: AdminTemplatesResponse = { items: templatesStore };
     return HttpResponse.json(payload);
+  }),
+
+  http.post("/api/v1/admin/templates", async ({ request }) => {
+    let rawId = `imported_${Date.now().toString(36)}`;
+    let rawName = "Imported Template Draft";
+
+    try {
+      const formData = await request.formData();
+      const file = formData.get("file");
+      if (file && typeof (file as File).text === "function") {
+        const text = await (file as File).text().catch(() => "");
+        try {
+          const parsed = JSON.parse(text) as Record<string, unknown>;
+          const meta = (parsed.meta ?? {}) as Record<string, unknown>;
+          if (typeof meta.id === "string" && meta.id) rawId = meta.id;
+          else if (typeof parsed.id === "string" && parsed.id) rawId = parsed.id;
+          if (typeof meta.name === "string" && meta.name) rawName = meta.name;
+          else if (typeof parsed.name === "string" && parsed.name) rawName = parsed.name;
+        } catch {
+          const fname = (file as File).name;
+          if (fname) {
+            rawName = fname.replace(/\.(cliptpl\.zip|json)$/i, "") || rawName;
+          }
+        }
+      }
+    } catch {
+      // jsdom FormData fallback when running in Vitest
+    }
+
+    const imported: TemplateSummary = {
+      id: rawId,
+      kind: "caption",
+      name: rawName,
+      status: "draft",
+      latest_version: 1,
+      source: "upload",
+      valid: true,
+      validation_error: null,
+    };
+
+    templatesStore = [
+      imported,
+      ...templatesStore.filter((t) => t.id !== imported.id),
+    ];
+    appendAudit("template.import", `${imported.id}@v1`);
+    return HttpResponse.json(imported, { status: 201 });
+  }),
+
+  http.post("/api/v1/admin/templates/:id/publish", ({ params }) => {
+    const id = String(params.id);
+    const existing = templatesStore.find((t) => t.id === id);
+    if (!existing) {
+      return makeError("TEMPLATE_INVALID", `Template '${id}' not found.`, 404, false);
+    }
+    const updated: TemplateSummary = {
+      ...existing,
+      status: "published",
+      valid: true,
+      latest_version:
+        existing.status === "published"
+          ? existing.latest_version + 1
+          : existing.latest_version,
+    };
+    templatesStore = templatesStore.map((t) => (t.id === id ? updated : t));
+    appendAudit("template.publish", `${updated.id}@v${updated.latest_version}`);
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/admin/templates/:id/archive", ({ params }) => {
+    const id = String(params.id);
+    const existing = templatesStore.find((t) => t.id === id);
+    if (!existing) {
+      return makeError("TEMPLATE_INVALID", `Template '${id}' not found.`, 404, false);
+    }
+    const updated: TemplateSummary = { ...existing, status: "archived" };
+    templatesStore = templatesStore.map((t) => (t.id === id ? updated : t));
+    appendAudit("template.archive", updated.id);
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/admin/templates/:id/duplicate", ({ params }) => {
+    const id = String(params.id);
+    const existing = templatesStore.find((t) => t.id === id);
+    if (!existing) {
+      return makeError("TEMPLATE_INVALID", `Template '${id}' not found.`, 404, false);
+    }
+    const copy: TemplateSummary = {
+      ...existing,
+      id: `${existing.id}_copy_${Date.now().toString(36).slice(-4)}`,
+      name: `${existing.name} (Copy)`,
+      status: "draft",
+      latest_version: 1,
+      source: "upload",
+    };
+    templatesStore = [copy, ...templatesStore];
+    appendAudit("template.duplicate", copy.id);
+    return HttpResponse.json(copy, { status: 201 });
+  }),
+
+  http.get("/api/v1/admin/templates/:id/export", ({ params }) => {
+    const id = String(params.id);
+    const existing = templatesStore.find((t) => t.id === id);
+    return new HttpResponse(
+      JSON.stringify(existing ?? { id }, null, 2),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="${id}.json"`,
+        },
+      }
+    );
+  }),
+
+  http.get("/api/v1/admin/presets", ({ request }) => {
+    if (getMockMode(request) === "empty") {
+      const empty: AdminPresetsResponse = { items: [] };
+      return HttpResponse.json(empty);
+    }
+    const payload: AdminPresetsResponse = { items: presetsStore };
+    return HttpResponse.json(payload);
+  }),
+
+  http.post("/api/v1/admin/presets", async ({ request }) => {
+    const body = (await request.json()) as Preset;
+    if (body.is_default) {
+      presetsStore = presetsStore.map((p) => ({ ...p, is_default: false }));
+    }
+    const idx = presetsStore.findIndex((p) => p.id === body.id);
+    const saved: Preset = {
+      ...body,
+      version: idx >= 0 ? presetsStore[idx]!.version + 1 : body.version || 1,
+    };
+    if (idx >= 0) {
+      presetsStore = presetsStore.map((p) => (p.id === body.id ? saved : p));
+    } else {
+      presetsStore = [saved, ...presetsStore];
+    }
+    appendAudit("preset.save", saved.id);
+    return HttpResponse.json(saved);
+  }),
+
+  http.get("/api/v1/admin/fonts", ({ request }) => {
+    if (getMockMode(request) === "empty") {
+      const empty: AdminFontsResponse = { items: [] };
+      return HttpResponse.json(empty);
+    }
+    const payload: AdminFontsResponse = { items: fontsStore };
+    return HttpResponse.json(payload);
+  }),
+
+  http.post("/api/v1/admin/fonts", async ({ request }) => {
+    let filename = `CustomFont_${Date.now().toString(36)}.ttf`;
+    let license = "OFL-1.1";
+
+    try {
+      const formData = await request.formData();
+      const file = formData.get("file");
+      const rawLic = formData.get("license");
+      if (typeof rawLic === "string" && rawLic.trim()) {
+        license = rawLic;
+      }
+      if (file && typeof (file as File).name === "string" && (file as File).name) {
+        filename = (file as File).name;
+      }
+    } catch {
+      // jsdom FormData fallback when running in Vitest
+    }
+
+    const family = filename.replace(/\.(ttf|otf|woff2)$/i, "").replace(/[-_].*$/, "");
+    const record: Record<string, unknown> = {
+      id: `font_${Date.now().toString(36)}`,
+      family: family || "CustomFont",
+      filename,
+      weight: 700,
+      license,
+      license_ok: license.toUpperCase() !== "UNKNOWN" && license.trim().length > 0,
+      coverage: { latn: true, deva: true, beng: false },
+      is_default_fallback: false,
+      fallback_scripts: [],
+    };
+    fontsStore = [record, ...fontsStore];
+    appendAudit("font.upload", filename);
+    return HttpResponse.json(record, { status: 201 });
+  }),
+
+  http.get("/api/v1/admin/brandkits", ({ request }) => {
+    if (getMockMode(request) === "empty") {
+      const empty: AdminBrandKitsResponse = { items: [] };
+      return HttpResponse.json(empty);
+    }
+    const payload: AdminBrandKitsResponse = { items: brandKitsStore };
+    return HttpResponse.json(payload);
+  }),
+
+  http.post("/api/v1/admin/brandkits", async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    const id =
+      typeof body.id === "string" && body.id.trim()
+        ? body.id
+        : `kit_${Date.now().toString(36)}`;
+    const saved = { ...body, id };
+    const exists = brandKitsStore.some((k) => k.id === id);
+    brandKitsStore = exists
+      ? brandKitsStore.map((k) => (k.id === id ? saved : k))
+      : [saved, ...brandKitsStore];
+    appendAudit("brandkit.save", id);
+    return HttpResponse.json(saved, { status: 201 });
   }),
 
   http.get("/api/v1/admin/blockers", ({ request }) => {
@@ -350,7 +948,7 @@ export const handlers = [
       return HttpResponse.json(empty);
     }
     const payload: AdminAuditResponse = {
-      items: mockAdminAudit,
+      items: auditStore,
       next_cursor: null,
     };
     return HttpResponse.json(payload);

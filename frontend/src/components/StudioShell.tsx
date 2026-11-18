@@ -2,23 +2,17 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
-  Clapperboard,
-  FolderSync,
   Home,
   Layers,
-  Link2,
   ListChecks,
   Palette,
   Settings,
   ShieldCheck,
-  Sparkles,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { ApiError } from "../api/client";
 import {
   useClipQuery,
-  useCreateJobMutation,
   useDeleteJobMutation,
   useDriveStatusQuery,
   useHealthQuery,
@@ -29,13 +23,9 @@ import {
   useTemplatesQuery,
 } from "../api/hooks";
 import type {
-  AspectRatio,
   ClipDetail,
   ClipSummary,
-  CreateJobRequest,
   JobDetail,
-  LanguageCode,
-  ScriptPref,
   TemplateKind,
 } from "../api/types";
 import { en } from "../i18n/en";
@@ -46,6 +36,8 @@ import {
   useStudioStore,
 } from "../store/studioStore";
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from "./StateViews";
+import { HomeView } from "./studio/HomeView";
+import { JobTimelineView } from "./studio/JobTimelineView";
 import {
   Badge,
   Button,
@@ -95,18 +87,11 @@ export function StudioShell() {
   const [browserOffline, setBrowserOffline] = useState(
     typeof navigator !== "undefined" ? !navigator.onLine : false
   );
-  const [sourceKind, setSourceKind] = useState<"url" | "upload" | "drive">("url");
-  const [urlInput, setUrlInput] = useState(
-    "https://www.youtube.com/watch?v=sample_hinglish_podcast"
+  const [templateKindFilter, setTemplateKindFilter] = useState<TemplateKind | "all">(
+    "all"
   );
-  const [language, setLanguage] = useState<LanguageCode>("hinglish");
-  const [scriptPref, setScriptPref] = useState<ScriptPref>("auto");
-  const [aspect, setAspect] = useState<AspectRatio>("9:16");
-  const [clipBrief, setClipBrief] = useState("");
-  const [rightsConfirmed, setRightsConfirmed] = useState(true);
-  const [formNotice, setFormNotice] = useState<string | null>(null);
-  const [templateKindFilter, setTemplateKindFilter] = useState<TemplateKind | "all">("all");
   const [jobPendingDelete, setJobPendingDelete] = useState<JobDetail | null>(null);
+  const [inspectedJobId, setInspectedJobId] = useState<string | null>(null);
 
   useEffect(() => {
     const onOffline = () => setBrowserOffline(true);
@@ -142,56 +127,8 @@ export function StudioShell() {
 
   const clipDetailQuery = useClipQuery(resolvedClipId);
 
-  const createJobMutation = useCreateJobMutation();
   const patchClipMutation = usePatchClipMutation();
   const deleteJobMutation = useDeleteJobMutation();
-
-  const handleCreateJob = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormNotice(null);
-    if (sourceKind === "url" && !urlInput.trim()) {
-      setFormNotice(en.home.urlValidationError);
-      return;
-    }
-
-    if (!rightsConfirmed) {
-      setFormNotice(en.home.rightsValidationError);
-      return;
-    }
-
-    const payload: CreateJobRequest = {
-      source:
-        sourceKind === "url"
-          ? { kind: "url", url: urlInput.trim() }
-          : sourceKind === "upload"
-            ? { kind: "upload", upload_id: "upload_local_demo" }
-            : { kind: "drive", drive_file_id: "drive_source_demo" },
-      language,
-      script_pref: scriptPref,
-      aspect,
-      preset_id: selectedPresetId,
-      auto_mode: true,
-      max_clips: 8,
-      clip_brief: clipBrief.trim() || null,
-      rights_confirmed: true,
-    };
-
-    createJobMutation.mutate(payload, {
-      onSuccess: (created) => {
-        setFormNotice(null);
-        setSelectedJobId(created.id);
-        setSelectedClipId(created.clips?.[0]?.id ?? null);
-        toast({
-          title: en.home.jobCreatedToast,
-          description: en.home.jobCreatedToastDesc,
-          tone: "ok",
-        });
-      },
-      onError: (err) => {
-        setFormNotice(err instanceof Error ? err.message : en.states.errorBody);
-      },
-    });
-  };
 
   const handleSelectCaptionTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -236,6 +173,9 @@ export function StudioShell() {
         if (selectedJobId === deletingId) {
           setSelectedJobId(null);
         }
+        if (inspectedJobId === deletingId) {
+          setInspectedJobId(null);
+        }
         setJobPendingDelete(null);
         toast({
           title: en.jobs.deletedToast,
@@ -264,17 +204,9 @@ export function StudioShell() {
   const presets = presetsQuery.data?.items ?? [];
   const activeClip: ClipDetail | undefined = clipDetailQuery.data;
 
-  const previewLines = Array.isArray(activeClip?.clip_plan?.caption_preview_lines)
-    ? (activeClip.clip_plan.caption_preview_lines as string[])
-    : [activeClipSummary?.hook_line ?? "90% startups yahi galti karte hain!"];
-
-  const activeTemplateId =
-    typeof activeClip?.clip_plan?.template_id === "string"
-      ? activeClip.clip_plan.template_id
-      : selectedTemplateId;
-
-  const selectedTemplate =
-    templates.find((t) => t.id === activeTemplateId) ?? templates[0];
+  const inspectedJob =
+    jobs.find((j) => j.id === inspectedJobId) ??
+    (activeJob?.id === inspectedJobId ? activeJob : undefined);
 
   return (
     <div className="min-h-screen bg-bg text-text flex flex-col md:flex-row">
@@ -409,418 +341,32 @@ export function StudioShell() {
           ) : (
             <>
               {activeTab === "home" ? (
-                <div className="space-y-6">
-                  {/* New Job Form Card */}
-                  <Card aria-labelledby="new-job-heading" className="p-4 sm:p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h2
-                          id="new-job-heading"
-                          className="text-lg font-bold text-text"
-                        >
-                          {en.home.title}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-text-dim">
-                          {en.home.subtitle}
-                        </p>
-                      </div>
-                      <div
-                        role="tablist"
-                        aria-label="Video source type"
-                        className="inline-flex rounded-sm border border-border bg-surface-2 p-1"
-                      >
-                        {(
-                          [
-                            {
-                              id: "url",
-                              label: en.home.sourceKinds.url,
-                              icon: Link2,
-                            },
-                            {
-                              id: "upload",
-                              label: en.home.sourceKinds.upload,
-                              icon: Upload,
-                            },
-                            {
-                              id: "drive",
-                              label: en.home.sourceKinds.drive,
-                              icon: FolderSync,
-                            },
-                          ] as const
-                        ).map(({ id, label, icon: Icon }) => (
-                          <button
-                            key={id}
-                            type="button"
-                            role="tab"
-                            aria-selected={sourceKind === id}
-                            onClick={() => setSourceKind(id)}
-                            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition ${
-                              sourceKind === id
-                                ? "bg-accent text-accent-fg"
-                                : "text-text-dim hover:text-text"
-                            }`}
-                          >
-                            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                            <span>{label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleCreateJob} className="mt-4 space-y-4">
-                      {sourceKind === "url" ? (
-                        <div>
-                          <label htmlFor="job-url" className="sr-only">
-                            Video URL
-                          </label>
-                          <input
-                            id="job-url"
-                            type="url"
-                            value={urlInput}
-                            onChange={(e) => setUrlInput(e.target.value)}
-                            placeholder={en.home.urlPlaceholder}
-                            className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-text-dim"
-                          />
-                        </div>
-                      ) : (
-                        <div className="rounded-sm border border-dashed border-border bg-surface-2 px-3 py-3 text-xs text-text-dim">
-                          {sourceKind === "upload"
-                            ? en.home.uploadHint
-                            : en.home.driveHint}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">
-                            {en.home.languageLabel}
-                          </span>
-                          <select
-                            value={language}
-                            onChange={(e) =>
-                              setLanguage(e.target.value as LanguageCode)
-                            }
-                            className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
-                          >
-                            <option value="auto">Auto</option>
-                            <option value="hinglish">Hinglish</option>
-                            <option value="en">English</option>
-                            <option value="hi">Hindi (हिन्दी)</option>
-                            <option value="bn">Bengali (বাংলা)</option>
-                          </select>
-                        </label>
-
-                        <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">
-                            {en.home.scriptLabel}
-                          </span>
-                          <select
-                            value={scriptPref}
-                            onChange={(e) =>
-                              setScriptPref(e.target.value as ScriptPref)
-                            }
-                            className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
-                          >
-                            <option value="auto">Auto</option>
-                            <option value="latn">Roman / Latin</option>
-                            <option value="native">Native Script</option>
-                          </select>
-                        </label>
-
-                        <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">
-                            {en.home.aspectLabel}
-                          </span>
-                          <select
-                            value={aspect}
-                            onChange={(e) =>
-                              setAspect(e.target.value as AspectRatio)
-                            }
-                            className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
-                          >
-                            <option value="9:16">9:16 Vertical</option>
-                            <option value="1:1">1:1 Square</option>
-                            <option value="4:5">4:5 Portrait</option>
-                          </select>
-                        </label>
-
-                        <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">
-                            {en.home.presetLabel}
-                          </span>
-                          <select
-                            value={selectedPresetId}
-                            onChange={(e) => setSelectedPresetId(e.target.value)}
-                            className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
-                          >
-                            {(presets.length > 0
-                              ? presets
-                              : [{ id: "default", name: "Viral Hinglish 9:16" }]
-                            ).map((preset) => (
-                              <option key={preset.id} value={preset.id}>
-                                {preset.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-
-                      <label className="block space-y-1 text-xs">
-                        <span className="text-text-dim">{en.home.briefLabel}</span>
-                        <input
-                          type="text"
-                          value={clipBrief}
-                          onChange={(e) => setClipBrief(e.target.value)}
-                          placeholder={en.home.briefPlaceholder}
-                          className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-3 text-sm text-text placeholder:text-text-dim"
-                        />
-                      </label>
-
-                      {formNotice ? (
-                        <p role="alert" className="text-xs font-medium text-err">
-                          {formNotice}
-                        </p>
-                      ) : null}
-
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <label className="flex min-h-[44px] items-center gap-2 text-xs text-text-dim">
-                          <input
-                            type="checkbox"
-                            checked={rightsConfirmed}
-                            onChange={(e) => setRightsConfirmed(e.target.checked)}
-                            className="h-4 w-4 accent-[#FFD400]"
-                          />
-                          <span>{en.home.rightsLabel}</span>
-                        </label>
-
-                        <Button
-                          type="submit"
-                          loading={createJobMutation.isPending}
-                          leftIcon={
-                            <Sparkles className="h-4 w-4" aria-hidden="true" />
-                          }
-                        >
-                          {createJobMutation.isPending
-                            ? en.home.startingButton
-                            : en.home.startButton}
-                        </Button>
-                      </div>
-                    </form>
-                  </Card>
-
-                  {/* Clips + 9:16 Preview Split */}
-                  {jobs.length === 0 ? (
-                    <EmptyState
-                      title={en.jobs.emptyTitle}
-                      body={en.jobs.emptyBody}
-                      actionLabel={en.jobs.emptyCta}
-                      onAction={() => {
-                        setSimulation("normal");
-                        document.getElementById("job-url")?.focus();
-                      }}
-                    />
-                  ) : (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                      {/* Ranked Clips */}
-                      <section
-                        aria-labelledby="clips-heading"
-                        className="space-y-3 lg:col-span-7"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <h2 id="clips-heading" className="text-base font-bold">
-                              {en.home.clipsTitle} ·{" "}
-                              {activeJob?.title ?? "Untitled"}
-                            </h2>
-                            <p className="text-xs text-text-dim">
-                              {activeJob?.platform?.toUpperCase() ?? "SOURCE"} ·{" "}
-                              {activeJob?.language.toUpperCase()} ·{" "}
-                              {activeJob?.clips?.length ?? 0} clips
-                            </p>
-                          </div>
-                          {activeJob ? (
-                            <StatusBadge status={activeJob.status} />
-                          ) : null}
-                        </div>
-
-                        <div className="space-y-3">
-                          {(activeJob?.clips ?? []).map((clip) => {
-                            const selected = clip.id === resolvedClipId;
-                            const scorePct = Math.round(clip.score * 100);
-                            return (
-                              <button
-                                key={clip.id}
-                                type="button"
-                                onClick={() => setSelectedClipId(clip.id)}
-                                className={`w-full rounded-lg border p-4 text-left transition ${
-                                  selected
-                                    ? "border-accent bg-surface"
-                                    : "border-border bg-surface/60 hover:border-text-dim"
-                                }`}
-                              >
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <Badge tone="accent" size="sm">
-                                      #{clip.rank} · {scorePct}/100
-                                    </Badge>
-                                    <span className="text-xs text-text-dim">
-                                      {clip.start_s}s – {clip.end_s}s
-                                    </span>
-                                  </div>
-                                  <StatusBadge status={clip.status} />
-                                </div>
-                                <p className="mt-2 text-sm font-semibold text-text">
-                                  {clip.title ?? "Untitled Clip"}
-                                </p>
-                                {clip.reason ? (
-                                  <p className="mt-1 text-xs text-text-dim">
-                                    <span className="font-semibold text-text">
-                                      {en.home.scoreWhy}:
-                                    </span>{" "}
-                                    {clip.reason}
-                                  </p>
-                                ) : null}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </section>
-
-                      {/* 9:16 Live Preview */}
-                      <Card
-                        aria-labelledby="preview-heading"
-                        className="space-y-4 lg:col-span-5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <h2
-                            id="preview-heading"
-                            className="text-sm font-bold uppercase tracking-wide text-text-dim"
-                          >
-                            {en.home.previewTitle}
-                          </h2>
-                          {selectedTemplate ? (
-                            <span className="text-xs font-semibold text-accent">
-                              {selectedTemplate.name}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {clipDetailQuery.isLoading ? (
-                          <LoadingState
-                            title="Loading clip preview..."
-                            body=""
-                            showSkeletons={false}
-                          />
-                        ) : clipDetailQuery.isError ? (
-                          <ErrorState
-                            message={
-                              clipDetailQuery.error instanceof ApiError
-                                ? clipDetailQuery.error.message
-                                : en.states.errorBody
-                            }
-                            onRetry={() => void clipDetailQuery.refetch()}
-                          />
-                        ) : (
-                          <>
-                            <div className="mx-auto flex aspect-[9/16] max-h-[340px] w-full max-w-[200px] flex-col justify-between overflow-hidden rounded-md border border-border bg-bg p-3">
-                              <div className="flex items-center justify-between text-[10px] text-text-dim">
-                                <span>9:16 SAFE AREA</span>
-                                <Clapperboard
-                                  className="h-3.5 w-3.5"
-                                  aria-hidden="true"
-                                />
-                              </div>
-                              <div className="my-auto text-center">
-                                {previewLines.map((line, idx) => (
-                                  <p
-                                    key={line}
-                                    className={`text-sm font-extrabold leading-snug ${
-                                      idx === 1
-                                        ? "text-accent scale-105"
-                                        : "text-text"
-                                    }`}
-                                  >
-                                    {line}
-                                  </p>
-                                ))}
-                              </div>
-                              <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
-                                <div className="h-full w-2/3 bg-accent" />
-                              </div>
-                            </div>
-
-                            {/* Score Breakdown */}
-                            {activeClip?.score_breakdown ? (
-                              <div className="space-y-2">
-                                <p className="text-xs font-semibold text-text-dim">
-                                  {en.home.scoreBreakdown}
-                                </p>
-                                <div className="space-y-1.5">
-                                  {Object.entries(activeClip.score_breakdown).map(
-                                    ([metric, val]) => {
-                                      const num =
-                                        typeof val === "number" ? val : 0;
-                                      const pct = Math.round(num * 100);
-                                      return (
-                                        <div
-                                          key={metric}
-                                          className="flex items-center gap-2 text-xs"
-                                        >
-                                          <span className="w-16 capitalize text-text-dim">
-                                            {metric}
-                                          </span>
-                                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
-                                            <div
-                                              className="h-full bg-accent"
-                                              style={{ width: `${pct}%` }}
-                                            />
-                                          </div>
-                                          <span className="w-8 text-right font-mono text-text">
-                                            {pct}
-                                          </span>
-                                        </div>
-                                      );
-                                    }
-                                  )}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {/* Quick Template Selector */}
-                            <div className="grid grid-cols-2 gap-2">
-                              {templates
-                                .filter((t) => t.kind === "caption")
-                                .slice(0, 4)
-                                .map((tpl) => {
-                                  const isSelected = activeTemplateId === tpl.id;
-                                  return (
-                                    <button
-                                      key={tpl.id}
-                                      type="button"
-                                      onClick={() =>
-                                        handleSelectCaptionTemplate(tpl.id)
-                                      }
-                                      className={`min-h-[44px] rounded-sm border px-2.5 py-2 text-left text-xs font-medium transition ${
-                                        isSelected
-                                          ? "border-accent bg-accent/10 text-accent"
-                                          : "border-border bg-surface-2 text-text hover:border-text-dim"
-                                      }`}
-                                    >
-                                      {tpl.name}
-                                    </button>
-                                  );
-                                })}
-                            </div>
-
-                            <p className="text-[11px] text-text-dim">
-                              {en.home.previewDisclaimer}
-                            </p>
-                          </>
-                        )}
-                      </Card>
-                    </div>
-                  )}
-                </div>
+                <HomeView
+                  jobs={jobs}
+                  activeJob={activeJob}
+                  activeClip={activeClip}
+                  activeClipSummary={activeClipSummary}
+                  resolvedClipId={resolvedClipId}
+                  clipLoading={clipDetailQuery.isLoading}
+                  clipError={
+                    clipDetailQuery.isError
+                      ? clipDetailQuery.error instanceof ApiError
+                        ? clipDetailQuery.error.message
+                        : en.states.errorBody
+                      : null
+                  }
+                  onRetryClip={() => void clipDetailQuery.refetch()}
+                  presets={presets}
+                  templates={templates}
+                  selectedPresetId={selectedPresetId}
+                  selectedTemplateId={selectedTemplateId}
+                  onSelectPresetId={setSelectedPresetId}
+                  onSelectJobId={setSelectedJobId}
+                  onSelectClipId={setSelectedClipId}
+                  onSelectCaptionTemplate={handleSelectCaptionTemplate}
+                  onRequestDeleteJob={setJobPendingDelete}
+                  onResetEmptySimulation={() => setSimulation("normal")}
+                />
               ) : null}
 
               {activeTab === "jobs" ? (
@@ -834,7 +380,21 @@ export function StudioShell() {
                     </p>
                   </div>
 
-                  {jobs.length === 0 ? (
+                  {inspectedJob ? (
+                    <div className="space-y-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setInspectedJobId(null)}
+                      >
+                        ← Back to all jobs
+                      </Button>
+                      <JobTimelineView
+                        job={inspectedJob}
+                        onRequestDelete={setJobPendingDelete}
+                      />
+                    </div>
+                  ) : jobs.length === 0 ? (
                     <EmptyState
                       title={en.jobs.emptyTitle}
                       body={en.jobs.emptyBody}
@@ -856,8 +416,15 @@ export function StudioShell() {
                                 {job.clips?.length ?? 0} clips
                               </CardDescription>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <StatusBadge status={job.status} />
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setInspectedJobId(job.id)}
+                              >
+                                {en.jobs.inspectTimeline}
+                              </Button>
                               <Button
                                 variant="destructive"
                                 size="sm"
@@ -881,7 +448,9 @@ export function StudioShell() {
                                     ? "border-ok/30 bg-ok/10 text-ok"
                                     : st.status === "RUNNING"
                                       ? "border-accent/40 bg-accent/10 text-accent"
-                                      : "border-border bg-surface-2 text-text-dim"
+                                      : st.status === "FAILED"
+                                        ? "border-err/40 bg-err/10 text-err"
+                                        : "border-border bg-surface-2 text-text-dim"
                                 }`}
                               >
                                 {st.stage}: {st.status}
@@ -1152,7 +721,10 @@ export function StudioShell() {
                     </Card>
                   </div>
 
-                  <Card variant="raised" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <Card
+                    variant="raised"
+                    className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div>
                       <CardTitle>{en.settings.adminLinkTitle}</CardTitle>
                       <CardDescription className="mt-1">

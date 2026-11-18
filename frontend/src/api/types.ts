@@ -30,16 +30,33 @@ export type ErrorCode = components["schemas"]["ErrorCode"];
 
 export type ListJobsQuery = operations["listJobs"]["parameters"]["query"];
 export type ListTemplatesQuery = operations["listTemplates"]["parameters"]["query"];
+export type ListDriveFilesQuery = operations["listDriveFiles"]["parameters"]["query"];
 
 export type TemplateListResponse =
   operations["listTemplates"]["responses"][200]["content"]["application/json"];
+export type TemplateVersionsResponse =
+  operations["listTemplateVersions"]["responses"][200]["content"]["application/json"];
+export type PreviewTemplatePayload =
+  NonNullable<operations["previewTemplate"]["requestBody"]>["content"]["application/json"];
 export type PresetListResponse =
   operations["listPresets"]["responses"][200]["content"]["application/json"];
 export type PatchClipPayload =
   operations["patchClip"]["requestBody"]["content"]["application/merge-patch+json"];
+export type RetryJobPayload =
+  NonNullable<operations["retryJob"]["requestBody"]>["content"]["application/json"];
+export type InitUploadPayload =
+  operations["initUpload"]["requestBody"]["content"]["application/json"];
+export type DriveFilesResponse =
+  operations["listDriveFiles"]["responses"][200]["content"]["application/json"];
+export type DrivePickPayload =
+  operations["pickDriveFile"]["requestBody"]["content"]["application/json"];
+export type DrivePickResponse =
+  operations["pickDriveFile"]["responses"][200]["content"]["application/json"];
 
 export type AdminTemplatesResponse =
   operations["adminListTemplates"]["responses"][200]["content"]["application/json"];
+export type AdminPresetsResponse =
+  operations["adminListPresets"]["responses"][200]["content"]["application/json"];
 export type AdminBlockersResponse =
   operations["adminListBlockers"]["responses"][200]["content"]["application/json"];
 export type AdminAuditResponse =
@@ -48,8 +65,14 @@ export type AdminSettingsResponse =
   operations["adminGetSettings"]["responses"][200]["content"]["application/json"];
 export type AdminFontsResponse =
   operations["adminListFonts"]["responses"][200]["content"]["application/json"];
+export type AdminFontRecord =
+  operations["adminUploadFont"]["responses"][201]["content"]["application/json"];
 export type AdminBrandKitsResponse =
   operations["adminListBrandKits"]["responses"][200]["content"]["application/json"];
+export type AdminBrandKitPayload =
+  operations["adminCreateBrandKit"]["requestBody"]["content"]["application/json"];
+export type AdminBrandKitRecord =
+  operations["adminCreateBrandKit"]["responses"][201]["content"]["application/json"];
 export type AdminPromptsResponse =
   operations["adminListPrompts"]["responses"][200]["content"]["application/json"];
 export type AdminScoringResponse =
