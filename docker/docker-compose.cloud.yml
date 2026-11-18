@@ -1,0 +1,79 @@
+# Cloud scaling compose override (T-12.2):
+# Usage: docker compose -f docker-compose.yml -f docker/docker-compose.cloud.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clipper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clipper}
+      POSTGRES_DB: ${POSTGRES_DB:-clipper}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clipper} -d ${POSTGRES_DB:-clipper}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    environment:
+      APP_ENV: prod
+      CLIPPER_DB_URL: ${CLIPPER_DB_URL:-postgresql+psycopg://clipper:clipper@postgres:5432/clipper}
+      DATABASE_URL: ${CLIPPER_DB_URL:-postgresql+psycopg://clipper:clipper@postgres:5432/clipper}
+      CLIPPER_REDIS_URL: ${CLIPPER_REDIS_URL:-redis://redis:6379/0}
+      QUEUE_URL: ${CLIPPER_REDIS_URL:-redis://redis:6379/0}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      CLIPPER_S3_ENDPOINT: ${CLIPPER_S3_ENDPOINT:-}
+      CLIPPER_S3_BUCKET: ${CLIPPER_S3_BUCKET:-clipper-media}
+      CLIPPER_S3_REGION: ${CLIPPER_S3_REGION:-auto}
+      CLIPPER_S3_ACCESS_KEY: ${CLIPPER_S3_ACCESS_KEY:-}
+      CLIPPER_S3_SECRET_KEY: ${CLIPPER_S3_SECRET_KEY:-}
+      S3_ENDPOINT: ${CLIPPER_S3_ENDPOINT:-}
+      S3_BUCKET: ${CLIPPER_S3_BUCKET:-clipper-media}
+      S3_ACCESS_KEY: ${CLIPPER_S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${CLIPPER_S3_SECRET_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    environment:
+      APP_ENV: prod
+      CLIPPER_DB_URL: ${CLIPPER_DB_URL:-postgresql+psycopg://clipper:clipper@postgres:5432/clipper}
+      DATABASE_URL: ${CLIPPER_DB_URL:-postgresql+psycopg://clipper:clipper@postgres:5432/clipper}
+      CLIPPER_REDIS_URL: ${CLIPPER_REDIS_URL:-redis://redis:6379/0}
+      QUEUE_URL: ${CLIPPER_REDIS_URL:-redis://redis:6379/0}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      CLIPPER_S3_ENDPOINT: ${CLIPPER_S3_ENDPOINT:-}
+      CLIPPER_S3_BUCKET: ${CLIPPER_S3_BUCKET:-clipper-media}
+      CLIPPER_S3_REGION: ${CLIPPER_S3_REGION:-auto}
+      CLIPPER_S3_ACCESS_KEY: ${CLIPPER_S3_ACCESS_KEY:-}
+      CLIPPER_S3_SECRET_KEY: ${CLIPPER_S3_SECRET_KEY:-}
+      S3_ENDPOINT: ${CLIPPER_S3_ENDPOINT:-}
+      S3_BUCKET: ${CLIPPER_S3_BUCKET:-clipper-media}
+      S3_ACCESS_KEY: ${CLIPPER_S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${CLIPPER_S3_SECRET_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
