@@ -51,4 +51,4 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["backend/tests", "hitl/tests"]
+testpaths = ["backend/tests", "hitl/tests", "drive/tests"]
