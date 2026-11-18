@@ -340,9 +340,10 @@ def test_admin_blockers_list_both_dirs_and_resolve_without_secret_leaks(hdb_env)
         assert b["status"] in ("OPEN", "RESOLVED")
 
     # Attempting to resolve with a raw leaked API key in resolution_note is rejected (422)
+    synthetic_leaked_key = "AIza" + "SyD-1234567890abcdefghijklmnopqrstuvwx"
     leaked_resolve = client.post(
         "/api/v1/admin/blockers/BLK-0001/resolve",
-        json={"resolution_note": "Added key AIzaSyD-1234567890abcdefghijklmnopqrstuvwx"},
+        json={"resolution_note": f"Added key {synthetic_leaked_key}"},
     )
     assert leaked_resolve.status_code == 422
 

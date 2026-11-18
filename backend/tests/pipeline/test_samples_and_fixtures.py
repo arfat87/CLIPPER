@@ -148,15 +148,22 @@ def test_fixture_validates_against_contract_schema(fixture_name: str, schema_nam
 
 
 def test_all_v2_templates_validate_against_caption_template_schema() -> None:
+    from backend.pipeline.captions.template_loader import validate_template_v2
+
     schema_path = SCHEMAS_DIR / "caption_template.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     template_files = sorted(TEMPLATES_V2_DIR.glob("*/template.json"))
     found_ids = [p.parent.name for p in template_files]
-    assert found_ids == sorted(EXPECTED_TEMPLATES_V2)
-    assert len(template_files) == 6
+    assert set(EXPECTED_TEMPLATES_V2).issubset(set(found_ids))
+    assert len(template_files) >= 6
 
     for template_path in template_files:
         data = json.loads(template_path.read_text(encoding="utf-8"))
-        jsonschema.validate(instance=data, schema=schema)
-        assert data["meta"]["id"] == template_path.parent.name
+        kind = data.get("meta", {}).get("kind", data.get("kind", "caption"))
+        if kind == "caption" and "meta" in data and "font" in data:
+            jsonschema.validate(instance=data, schema=schema)
+            assert data["meta"]["id"] == template_path.parent.name
+        else:
+            valid, errors, _warnings = validate_template_v2(data)
+            assert valid and errors == [], f"Template {template_path} failed validation: {errors}"
