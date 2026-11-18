@@ -472,12 +472,12 @@ def admin_list_jobs(
     if status is not None and status not in _VALID_JOB_STATUSES:
         raise AdminError(422, "VALIDATION_ERROR", f"Invalid job status filter: {status!r}")
 
-    filters = [col(Job.deleted_at).is_(None)]
+    filters: list[Any] = [col(Job.deleted_at).is_(None)]
     if status is not None:
         filters.append(col(Job.status) == status)
 
     total = int(session.exec(select(func.count()).select_from(Job).where(*filters)).one())
-    query_filters = list(filters)
+    query_filters: list[Any] = list(filters)
     if cursor:
         try:
             obj = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))

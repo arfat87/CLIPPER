@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import jsonschema
+import jsonschema  # type: ignore[import-untyped]
 import pysubs2
 import yaml
 from sqlmodel import Session, col, select
@@ -435,7 +435,8 @@ def validate_any_template_payload(
 
 
 def _extract_template_meta(data: dict[str, Any], fallback_id: str = "") -> tuple[str, str, int]:
-    meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+    raw_meta = data.get("meta")
+    meta: dict[str, Any] = raw_meta if isinstance(raw_meta, dict) else {}
     tid = str(meta.get("id") or data.get("id") or fallback_id).strip()
     name = str(meta.get("name") or data.get("name") or tid).strip()
     ver_raw = meta.get("version") or data.get("version") or 1
