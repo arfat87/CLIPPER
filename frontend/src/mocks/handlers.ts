@@ -6,33 +6,44 @@ import type {
   AdminFontsResponse,
   AdminPresetsResponse,
   AdminTemplatesResponse,
+  Blocker,
   ClipDetail,
   CreateJobRequest,
   DriveFilesResponse,
+  DriveStatus,
   ErrorEnvelope,
   JobDetail,
   JobStatus,
   PaginatedJobs,
   Preset,
   PresetListResponse,
+  PublishPack,
+  RenderRecord,
   StageName,
   TemplateListResponse,
   TemplateSummary,
+  Transcript,
   UploadSession,
 } from "../api/types";
 import {
   initialMockJobs,
   mockAdminAudit,
   mockAdminBlockers,
+  mockAdminPrompts,
+  mockAdminScoring,
   mockAdminSettings,
   mockBrandKits,
   mockClipsById,
   mockDriveFiles,
   mockDriveStatus,
+  mockDriveTree,
   mockFonts,
   mockHealth,
   mockPresets,
+  mockPublishPacksByClipId,
   mockTemplates,
+  mockTranscriptsByJobId,
+  type MockPromptRecord,
 } from "./mockData";
 
 const PIPELINE_STAGES: Array<{ stage: StageName; status: JobStatus; label: string }> = [
@@ -51,7 +62,36 @@ let templatesStore: TemplateSummary[] = structuredClone(mockTemplates);
 let presetsStore: Preset[] = structuredClone(mockPresets);
 let fontsStore: Array<Record<string, unknown>> = structuredClone(mockFonts);
 let brandKitsStore: Array<Record<string, unknown>> = structuredClone(mockBrandKits);
+let promptsStore: MockPromptRecord[] = structuredClone(mockAdminPrompts);
+let scoringStore: Record<string, unknown> = structuredClone(mockAdminScoring);
+let settingsStore: Record<string, unknown> = structuredClone(mockAdminSettings);
+let driveStatusStore: DriveStatus = structuredClone(mockDriveStatus);
+let driveTreeStore = structuredClone(mockDriveTree);
+let blockersStore: Blocker[] = structuredClone(mockAdminBlockers);
 let auditStore: Array<Record<string, unknown>> = structuredClone(mockAdminAudit);
+let transcriptsStore: Record<string, Transcript> = structuredClone(
+  mockTranscriptsByJobId
+);
+let publishPacksStore: Record<string, PublishPack> = structuredClone(
+  mockPublishPacksByClipId
+);
+let rendersByClipStore: Record<string, RenderRecord[]> = {
+  clip_01: [
+    {
+      id: "rnd_01",
+      clip_id: "clip_01",
+      plan_hash: "ph_81f2a9",
+      aspect: "9:16",
+      profile: "1080p_h264_fast",
+      status: "DONE",
+      progress_pct: 100,
+      duration_s: 41.5,
+      file_url: "/api/v1/renders/rnd_01/file",
+      thumb_url: null,
+      created_at: "2026-11-18T12:14:00Z",
+    },
+  ],
+};
 let uploadSessionsStore: Record<string, UploadSession> = {};
 let jobPendingClipsStore: Record<string, ClipDetail[]> = {};
 let sseStepDelayMs = import.meta.env?.MODE === "test" ? 20 : 450;
@@ -67,7 +107,32 @@ export function resetMockStore(): void {
   presetsStore = structuredClone(mockPresets);
   fontsStore = structuredClone(mockFonts);
   brandKitsStore = structuredClone(mockBrandKits);
+  promptsStore = structuredClone(mockAdminPrompts);
+  scoringStore = structuredClone(mockAdminScoring);
+  settingsStore = structuredClone(mockAdminSettings);
+  driveStatusStore = structuredClone(mockDriveStatus);
+  driveTreeStore = structuredClone(mockDriveTree);
+  blockersStore = structuredClone(mockAdminBlockers);
   auditStore = structuredClone(mockAdminAudit);
+  transcriptsStore = structuredClone(mockTranscriptsByJobId);
+  publishPacksStore = structuredClone(mockPublishPacksByClipId);
+  rendersByClipStore = {
+    clip_01: [
+      {
+        id: "rnd_01",
+        clip_id: "clip_01",
+        plan_hash: "ph_81f2a9",
+        aspect: "9:16",
+        profile: "1080p_h264_fast",
+        status: "DONE",
+        progress_pct: 100,
+        duration_s: 41.5,
+        file_url: "/api/v1/renders/rnd_01/file",
+        thumb_url: null,
+        created_at: "2026-11-18T12:14:00Z",
+      },
+    ],
+  };
   uploadSessionsStore = {};
   jobPendingClipsStore = {};
 }
@@ -118,13 +183,14 @@ function makeError(
   return HttpResponse.json(payload, { status });
 }
 
-function appendAudit(action: string, target: string): void {
+function appendAudit(action: string, target: string, diff?: string): void {
   auditStore = [
     {
       id: `aud_${Date.now().toString(36)}`,
       actor: "owner",
       action,
       target,
+      diff: diff ?? `${action} applied on ${target}`,
       timestamp: new Date().toISOString(),
     },
     ...auditStore,
@@ -330,6 +396,106 @@ export const handlers = [
         status: idx < startIdx ? "DONE" : idx === startIdx ? "RUNNING" : "PENDING",
         attempt: (existing.stages?.[idx]?.attempt ?? 1) + (idx >= startIdx ? 1 : 0),
       })),
+      updated_at: new Date().toISOString(),
+    };
+    jobsStore = jobsStore.map((j) => (j.id === id ? updated : j));
+    return HttpResponse.json(updated, { status: 202 });
+  }),
+
+  http.post("/api/v1/jobs/:id/reselect", async ({ params, request }) => {
+    const id = String(params.id);
+    const existing = jobsStore.find((j) => j.id === id);
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Job '${id}' was not found.`, 404, false);
+    }
+    const body = (await request.json().catch(() => ({}))) as {
+      clip_brief?: string;
+      threshold?: number;
+      max_clips?: number;
+    };
+
+    const threshold = typeof body.threshold === "number" ? body.threshold : 0.4;
+    const maxClips = typeof body.max_clips === "number" ? body.max_clips : 8;
+    const baseClips = existing.clips ?? [];
+
+    let updatedClips = [...baseClips];
+    if (threshold <= 0.5 && updatedClips.length < maxClips) {
+      const extraClipId = `clip_reselect_${Date.now().toString(36)}`;
+      const extraClip: ClipDetail = {
+        id: extraClipId,
+        job_id: id,
+        rank: updatedClips.length + 1,
+        start_s: 340.0,
+        end_s: 382.0,
+        score: Number(Math.max(threshold + 0.08, 0.62).toFixed(2)),
+        score_mode: "hybrid",
+        title: body.clip_brief?.trim()
+          ? `Reselected: ${body.clip_brief.trim()}`
+          : "Customer Retention Truth Bomb (Reselected)",
+        reason: `Included after lowering quality threshold to ${threshold.toFixed(2)}.`,
+        hook_line: "Pehle 100 customers kaise milte hain?",
+        layout: "fill",
+        preset_id: existing.preset_id ?? "default",
+        status: "READY",
+        feedback: null,
+        actual_views: null,
+        score_breakdown: {
+          hook: 0.74,
+          pacing: 0.71,
+          clarity: 0.79,
+          payoff: 0.72,
+          novelty: 0.68,
+          engagement: 0.73,
+        },
+        clip_plan: {
+          schema_version: 1,
+          trim: { start_s: 340.0, end_s: 382.0 },
+          layout: "fill",
+          aspect: "9:16",
+          template_id: "bold_pop_yellow",
+          preset_id: existing.preset_id ?? "default",
+        },
+      };
+      clipsStore[extraClipId] = extraClip;
+      updatedClips = [...updatedClips, extraClip].slice(0, maxClips);
+    }
+
+    const updated: JobDetail = {
+      ...existing,
+      clips: updatedClips,
+      updated_at: new Date().toISOString(),
+    };
+    jobsStore = jobsStore.map((j) => (j.id === id ? updated : j));
+    return HttpResponse.json(updated, { status: 202 });
+  }),
+
+  http.post("/api/v1/jobs/:id/render-all", async ({ params, request }) => {
+    const id = String(params.id);
+    const existing = jobsStore.find((j) => j.id === id);
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Job '${id}' was not found.`, 404, false);
+    }
+    const body = (await request.json().catch(() => ({}))) as {
+      preset_id?: string;
+    };
+    const nextClips = (existing.clips ?? []).map((c) => {
+      const next = {
+        ...c,
+        preset_id: body.preset_id ?? c.preset_id,
+        status: "RENDERED",
+      };
+      if (clipsStore[c.id]) {
+        clipsStore[c.id] = {
+          ...clipsStore[c.id]!,
+          preset_id: next.preset_id,
+          status: "RENDERED",
+        };
+      }
+      return next;
+    });
+    const updated: JobDetail = {
+      ...existing,
+      clips: nextClips,
       updated_at: new Date().toISOString(),
     };
     jobsStore = jobsStore.map((j) => (j.id === id ? updated : j));
@@ -601,6 +767,249 @@ export const handlers = [
     return HttpResponse.json(updated);
   }),
 
+  http.post("/api/v1/clips/:id/feedback", async ({ params, request }) => {
+    const id = String(params.id);
+    const existing = clipsStore[id];
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Clip '${id}' was not found.`, 404, false);
+    }
+    const body = (await request.json()) as {
+      value: "up" | "down";
+      actual_views?: number;
+    };
+    const updated: ClipDetail = {
+      ...existing,
+      feedback: body.value,
+      actual_views:
+        body.actual_views !== undefined
+          ? body.actual_views
+          : existing.actual_views ?? null,
+    };
+    clipsStore[id] = updated;
+    jobsStore = jobsStore.map((job) =>
+      job.id === updated.job_id
+        ? {
+            ...job,
+            clips: (job.clips ?? []).map((c) =>
+              c.id === updated.id
+                ? {
+                    ...c,
+                    feedback: updated.feedback,
+                    actual_views: updated.actual_views,
+                  }
+                : c
+            ),
+          }
+        : job
+    );
+    const stats = (scoringStore.feedback_stats ?? {
+      up: 14,
+      down: 3,
+      total: 17,
+    }) as { up: number; down: number; total: number };
+    scoringStore = {
+      ...scoringStore,
+      feedback_stats: {
+        up: stats.up + (body.value === "up" ? 1 : 0),
+        down: stats.down + (body.value === "down" ? 1 : 0),
+        total: stats.total + 1,
+      },
+    };
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/clips/:id/render", async ({ params, request }) => {
+    const id = String(params.id);
+    const existing = clipsStore[id];
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Clip '${id}' was not found.`, 404, false);
+    }
+    const body = (await request.json().catch(() => ({}))) as {
+      preset_id?: string;
+      aspect?: "9:16" | "1:1" | "4:5";
+      profile?: string;
+    };
+    const renderRec: RenderRecord = {
+      id: `rnd_${Date.now().toString(36)}`,
+      clip_id: id,
+      plan_hash: "ph_live",
+      aspect: body.aspect ?? "9:16",
+      profile: body.profile ?? "1080p_h264_fast",
+      status: "DONE",
+      progress_pct: 100,
+      duration_s: Math.max(1, existing.end_s - existing.start_s),
+      file_url: `/api/v1/renders/rnd_${id}/file`,
+      thumb_url: null,
+      created_at: new Date().toISOString(),
+    };
+    rendersByClipStore[id] = [renderRec, ...(rendersByClipStore[id] ?? [])];
+    clipsStore[id] = { ...existing, status: "RENDERED" };
+    jobsStore = jobsStore.map((job) =>
+      job.id === existing.job_id
+        ? {
+            ...job,
+            clips: (job.clips ?? []).map((c) =>
+              c.id === id ? { ...c, status: "RENDERED" } : c
+            ),
+          }
+        : job
+    );
+    return HttpResponse.json(renderRec, { status: 202 });
+  }),
+
+  http.get("/api/v1/clips/:id/renders", ({ params }) => {
+    const id = String(params.id);
+    return HttpResponse.json({
+      items: rendersByClipStore[id] ?? [],
+    });
+  }),
+
+  http.get("/api/v1/jobs/:id/transcript", ({ params }) => {
+    const id = String(params.id);
+    const transcript =
+      transcriptsStore[id] ?? mockTranscriptsByJobId.job_hinglish_01!;
+    return HttpResponse.json(transcript);
+  }),
+
+  http.patch("/api/v1/jobs/:id/transcript", async ({ params, request }) => {
+    const id = String(params.id);
+    const current =
+      transcriptsStore[id] ??
+      structuredClone(mockTranscriptsByJobId.job_hinglish_01!);
+    const body = (await request.json()) as {
+      edits: Array<{ idx: number; text: string }>;
+    };
+    const editMap = new Map(body.edits.map((e) => [e.idx, e.text]));
+    let flatIdx = 0;
+    const nextSegments = current.segments.map((seg) => {
+      const words = Array.isArray(seg.words)
+        ? (seg.words as Array<{
+            w: string;
+            s: number;
+            e: number;
+            p?: number;
+            flags?: string[];
+          }>)
+        : [];
+      const updatedWords = words.map((word) => {
+        const myIdx = flatIdx++;
+        const nextText = editMap.get(myIdx);
+        if (nextText !== undefined) {
+          const prevFlags = Array.isArray(word.flags)
+            ? word.flags.filter((f) => f !== "low_conf")
+            : [];
+          return {
+            ...word,
+            w: nextText,
+            flags: Array.from(new Set([...prevFlags, "edited"])),
+          };
+        }
+        return word;
+      });
+      return {
+        ...seg,
+        words: updatedWords,
+        text: updatedWords.map((w) => w.w).join(" "),
+      };
+    });
+    const updated: Transcript = {
+      ...current,
+      segments: nextSegments,
+    };
+    transcriptsStore[id] = updated;
+    return HttpResponse.json(updated);
+  }),
+
+  http.get("/api/v1/clips/:id/publish-pack", ({ params }) => {
+    const id = String(params.id);
+    const existing = publishPacksStore[id];
+    if (existing) {
+      return HttpResponse.json(existing);
+    }
+    const clip = clipsStore[id];
+    const fallback: PublishPack = {
+      schema_version: 1,
+      clip_id: id,
+      platform: "youtube_shorts",
+      language: "hinglish",
+      title: clip?.title ?? `Highlight Clip ${id}`,
+      title_options: [
+        clip?.title ?? `Highlight Clip ${id}`,
+        "Wait till the end for this key insight!",
+      ],
+      description:
+        clip?.reason ?? "Top selected clip with burned-in captions.",
+      hashtags: ["#Shorts", "#Creators", "#CLIPPER"],
+      tags: ["shorts", "ai clips"],
+      pinned_comment: "What did you think of this takeaway?",
+      hook_line: clip?.hook_line ?? null,
+      valid: true,
+      warnings: [],
+    };
+    publishPacksStore[id] = fallback;
+    return HttpResponse.json(fallback);
+  }),
+
+  http.put("/api/v1/clips/:id/publish-pack", async ({ params, request }) => {
+    const id = String(params.id);
+    const current =
+      publishPacksStore[id] ?? mockPublishPacksByClipId.clip_01!;
+    const body = (await request.json()) as {
+      title?: string;
+      description?: string;
+      hashtags?: string[];
+      tags?: string[];
+      pinned_comment?: string | null;
+    };
+    const nextTitle = body.title ?? current.title;
+    const nextHashtags = body.hashtags ?? current.hashtags;
+    const warnings: string[] = [];
+    if (nextTitle.length > 70) {
+      warnings.push("Title exceeds 70 characters (may truncate on Shorts).");
+    }
+    if (nextHashtags.length > 15) {
+      warnings.push("More than 15 hashtags is rejected by YouTube/Instagram.");
+    }
+    const updated: PublishPack = {
+      ...current,
+      ...body,
+      title: nextTitle,
+      hashtags: nextHashtags,
+      valid: nextTitle.length <= 100 && nextHashtags.length <= 15,
+      warnings,
+    };
+    publishPacksStore[id] = updated;
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(
+    "/api/v1/clips/:id/publish-pack/regenerate",
+    async ({ params, request }) => {
+      const id = String(params.id);
+      const current =
+        publishPacksStore[id] ?? mockPublishPacksByClipId.clip_01!;
+      const body = (await request.json().catch(() => ({}))) as {
+        template_id?: string;
+        platform?: PublishPack["platform"];
+      };
+      const platform = body.platform ?? current.platform;
+      const updated: PublishPack = {
+        ...current,
+        platform,
+        title: `[Refreshed] ${current.title}`.slice(0, 95),
+        title_options: [
+          `[Refreshed] ${current.title}`.slice(0, 95),
+          "Do NOT skip this founder lesson before scaling!",
+          "Why most creators miss this 3-second hook",
+        ],
+        valid: true,
+        warnings: [],
+      };
+      publishPacksStore[id] = updated;
+      return HttpResponse.json(updated);
+    }
+  ),
+
   http.get("/api/v1/templates", ({ request }) => {
     const mode = getMockMode(request);
     if (mode === "error") {
@@ -679,7 +1088,22 @@ export const handlers = [
         false
       );
     }
-    return HttpResponse.json(mockDriveStatus);
+    return HttpResponse.json(driveStatusStore);
+  }),
+
+  http.post("/api/v1/drive/sync", async () => {
+    driveStatusStore = {
+      ...driveStatusStore,
+      status: "CONNECTED",
+      last_sync_at: new Date().toISOString(),
+      last_error: null,
+    };
+    appendAudit("drive.sync", "drive_mirror", "synced folders from Drive root");
+    return HttpResponse.json(driveStatusStore, { status: 202 });
+  }),
+
+  http.get("/api/v1/drive/tree", () => {
+    return HttpResponse.json(driveTreeStore);
   }),
 
   http.get("/api/v1/drive/files", ({ request }) => {
@@ -917,14 +1341,203 @@ export const handlers = [
     return HttpResponse.json(saved, { status: 201 });
   }),
 
+  http.get("/api/v1/admin/prompts", ({ request }) => {
+    if (getMockMode(request) === "empty") {
+      return HttpResponse.json({ items: [] });
+    }
+    return HttpResponse.json({
+      items: promptsStore.map((p) => ({
+        name: p.name,
+        path: p.path,
+        output: p.output,
+        active_version: p.active_version,
+        updated_at: p.updated_at,
+        version_count: p.versions.length,
+      })),
+    });
+  }),
+
+  http.get("/api/v1/admin/prompts/:name", ({ params }) => {
+    const name = String(params.name);
+    const found = promptsStore.find((p) => p.name === name);
+    if (!found) {
+      return makeError("VALIDATION_ERROR", `Prompt '${name}' not found.`, 404, false);
+    }
+    return HttpResponse.json(found);
+  }),
+
+  http.put("/api/v1/admin/prompts/:name", async ({ params, request }) => {
+    const name = String(params.name);
+    const found = promptsStore.find((p) => p.name === name);
+    if (!found) {
+      return makeError("VALIDATION_ERROR", `Prompt '${name}' not found.`, 404, false);
+    }
+    const body = (await request.json()) as { content: string };
+    const nextVersion =
+      Math.max(...found.versions.map((v) => v.version), 0) + 1;
+    const now = new Date().toISOString();
+    const updated: MockPromptRecord = {
+      ...found,
+      active_version: nextVersion,
+      updated_at: now,
+      versions: [
+        ...found.versions,
+        {
+          version: nextVersion,
+          created_at: now,
+          author: "owner",
+          content: body.content,
+        },
+      ],
+    };
+    promptsStore = promptsStore.map((p) => (p.name === name ? updated : p));
+    appendAudit(
+      "prompt.update",
+      `${name}@v${nextVersion}`,
+      `saved version v${nextVersion}`
+    );
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/admin/prompts/:name/activate", async ({ params, request }) => {
+    const name = String(params.name);
+    const found = promptsStore.find((p) => p.name === name);
+    if (!found) {
+      return makeError("VALIDATION_ERROR", `Prompt '${name}' not found.`, 404, false);
+    }
+    const body = (await request.json()) as { version: number };
+    const prev = found.active_version;
+    const updated: MockPromptRecord = {
+      ...found,
+      active_version: body.version,
+      updated_at: new Date().toISOString(),
+    };
+    promptsStore = promptsStore.map((p) => (p.name === name ? updated : p));
+    appendAudit(
+      "prompt.activate",
+      `${name}@v${body.version}`,
+      `active_version: v${prev} -> v${body.version}`
+    );
+    return HttpResponse.json(updated);
+  }),
+
+  http.post("/api/v1/admin/prompts/:name/test", ({ params }) => {
+    const name = String(params.name);
+    const found = promptsStore.find((p) => p.name === name);
+    if (!found) {
+      return makeError("VALIDATION_ERROR", `Prompt '${name}' not found.`, 404, false);
+    }
+    return HttpResponse.json({
+      prompt: name,
+      version: found.active_version,
+      schema_valid: true,
+      latency_ms: 412,
+      fixture: "hinglish_podcast_sample_01",
+      output: {
+        moments: [
+          {
+            start_word_idx: 18,
+            end_word_idx: 112,
+            hook: 94,
+            payoff: 90,
+            title: "3 Mistakes New Founders Make in India",
+            reason: "Strong contrarian hook with clean financial payoff.",
+          },
+        ],
+      },
+    });
+  }),
+
+  http.get("/api/v1/admin/scoring", () => {
+    return HttpResponse.json(scoringStore);
+  }),
+
+  http.put("/api/v1/admin/scoring", async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    scoringStore = {
+      ...scoringStore,
+      ...body,
+    };
+    appendAudit(
+      "scoring.update",
+      String(body.active_genre ?? scoringStore.active_genre ?? "podcast"),
+      "updated fusion weights and quality threshold"
+    );
+    return HttpResponse.json(scoringStore);
+  }),
+
+  http.post("/api/v1/admin/scoring/dry-run", async ({ request }) => {
+    const body = (await request.json()) as {
+      job_id: string;
+      weights?: Record<string, number>;
+    };
+    const job = jobsStore.find((j) => j.id === body.job_id) ?? jobsStore[0];
+    const clips = job?.clips ?? [];
+    const oldPicks = clips.map((c, idx) => ({
+      clip_id: c.id,
+      rank: idx + 1,
+      title: c.title ?? c.id,
+      score: c.score,
+    }));
+    const weightBoost =
+      typeof body.weights?.hook === "number" ? (body.weights.hook - 0.28) * 0.2 : 0.03;
+    const newPicks = [...clips]
+      .map((c) => {
+        const nextScore = Math.min(
+          0.99,
+          Math.max(0.2, Number((c.score + weightBoost + (c.rank === 2 ? 0.05 : -0.01)).toFixed(2)))
+        );
+        return {
+          clip_id: c.id,
+          title: c.title ?? c.id,
+          old_score: c.score,
+          score: nextScore,
+          delta: Number((nextScore - c.score).toFixed(2)),
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+    return HttpResponse.json({
+      job_id: body.job_id,
+      old_picks: oldPicks,
+      new_picks: newPicks,
+    });
+  }),
+
+  http.get("/api/v1/admin/drive", () => {
+    return HttpResponse.json(driveStatusStore);
+  }),
+
   http.get("/api/v1/admin/blockers", ({ request }) => {
     const mode = getMockMode(request);
     if (mode === "empty") {
       const empty: AdminBlockersResponse = { items: [] };
       return HttpResponse.json(empty);
     }
-    const payload: AdminBlockersResponse = { items: mockAdminBlockers };
+    const payload: AdminBlockersResponse = { items: blockersStore };
     return HttpResponse.json(payload);
+  }),
+
+  http.post("/api/v1/admin/blockers/:id/resolve", async ({ params, request }) => {
+    const id = String(params.id);
+    const existing = blockersStore.find((b) => b.id === id);
+    if (!existing) {
+      return makeError("VALIDATION_ERROR", `Blocker '${id}' not found.`, 404, false);
+    }
+    const body = (await request.json().catch(() => ({}))) as { note?: string };
+    const resolved: Blocker = {
+      ...existing,
+      status: "RESOLVED",
+      resolved_at: new Date().toISOString(),
+      payload: {
+        ...(existing.payload ?? {}),
+        resolution_note: body.note ?? "Validated via Admin Blockers Inbox",
+      },
+    };
+    blockersStore = blockersStore.map((b) => (b.id === id ? resolved : b));
+    appendAudit("blocker.resolve", id, body.note ?? "resolved blocker");
+    return HttpResponse.json(resolved);
   }),
 
   http.get("/api/v1/admin/jobs", ({ request }) => {
@@ -938,7 +1551,22 @@ export const handlers = [
   }),
 
   http.get("/api/v1/admin/settings", () => {
-    return HttpResponse.json(mockAdminSettings);
+    return HttpResponse.json(settingsStore);
+  }),
+
+  http.put("/api/v1/admin/settings", async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    const { secrets: _ignoredSecrets, ...safeFields } = body;
+    settingsStore = {
+      ...settingsStore,
+      ...safeFields,
+    };
+    appendAudit(
+      "settings.update",
+      "runtime",
+      `llm_provider=${String(settingsStore.llm_provider)}, device=${String(settingsStore.device)}`
+    );
+    return HttpResponse.json(settingsStore);
   }),
 
   http.get("/api/v1/admin/audit", ({ request }) => {

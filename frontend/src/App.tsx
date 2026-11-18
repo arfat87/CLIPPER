@@ -1,9 +1,12 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AdminShell } from "./components/AdminShell";
+import { LoadingState } from "./components/StateViews";
 import { StudioShell } from "./components/StudioShell";
 import { ToastProvider } from "./components/ui";
 import { useSyncRoute } from "./router";
 import { useStudioStore } from "./store/studioStore";
+
+const AdminShell = lazy(() => import("./components/AdminShell"));
 
 const defaultQueryClient = new QueryClient({
   defaultOptions: {
@@ -17,7 +20,20 @@ const defaultQueryClient = new QueryClient({
 function AppRouterView() {
   useSyncRoute();
   const area = useStudioStore((s) => s.area);
-  return area === "admin" ? <AdminShell /> : <StudioShell />;
+  if (area === "admin") {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-bg p-6">
+            <LoadingState />
+          </div>
+        }
+      >
+        <AdminShell />
+      </Suspense>
+    );
+  }
+  return <StudioShell />;
 }
 
 export function App({ client = defaultQueryClient }: { client?: QueryClient }) {

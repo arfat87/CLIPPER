@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   CheckCircle2,
   Home,
   Layers,
@@ -26,6 +27,7 @@ import type {
   ClipDetail,
   ClipSummary,
   JobDetail,
+  LanguageCode,
   TemplateKind,
 } from "../api/types";
 import { en } from "../i18n/en";
@@ -36,8 +38,12 @@ import {
   useStudioStore,
 } from "../store/studioStore";
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from "./StateViews";
+import { ClipGridView } from "./studio/ClipGridView";
 import { HomeView } from "./studio/HomeView";
 import { JobTimelineView } from "./studio/JobTimelineView";
+
+const ClipEditorView = lazy(() => import("./studio/ClipEditorView"));
+const PublishPackView = lazy(() => import("./studio/PublishPackView"));
 import {
   Badge,
   Button,
@@ -76,11 +82,14 @@ export function StudioShell() {
     selectedClipId,
     selectedPresetId,
     selectedTemplateId,
+    clipWorkspace,
     simulation,
     setSelectedJobId,
     setSelectedClipId,
     setSelectedPresetId,
     setSelectedTemplateId,
+    openClipWorkspace,
+    closeClipWorkspace,
     setSimulation,
   } = useStudioStore();
 
@@ -338,6 +347,62 @@ export function StudioShell() {
               }
               onRetry={refetchAll}
             />
+          ) : clipWorkspace ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={closeClipWorkspace}
+                  leftIcon={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}
+                >
+                  {en.clipEditor.backToClips}
+                </Button>
+
+                <div className="flex items-center gap-2" role="tablist">
+                  <Button
+                    role="tab"
+                    aria-selected={clipWorkspace.tab === "editor"}
+                    size="sm"
+                    variant={
+                      clipWorkspace.tab === "editor" ? "primary" : "secondary"
+                    }
+                    onClick={() =>
+                      openClipWorkspace(clipWorkspace.clipId, "editor")
+                    }
+                  >
+                    {en.clipEditor.tabEditor}
+                  </Button>
+                  <Button
+                    role="tab"
+                    aria-selected={clipWorkspace.tab === "publish"}
+                    size="sm"
+                    variant={
+                      clipWorkspace.tab === "publish" ? "primary" : "secondary"
+                    }
+                    onClick={() =>
+                      openClipWorkspace(clipWorkspace.clipId, "publish")
+                    }
+                  >
+                    {en.clipEditor.tabPublish}
+                  </Button>
+                </div>
+              </div>
+
+              <Suspense fallback={<LoadingState />}>
+                {clipWorkspace.tab === "editor" ? (
+                  <ClipEditorView
+                    clipId={clipWorkspace.clipId}
+                    jobLanguage={activeJob?.language as LanguageCode | undefined}
+                    onOpenPublishPack={() =>
+                      openClipWorkspace(clipWorkspace.clipId, "publish")
+                    }
+                  />
+                ) : (
+                  <PublishPackView clipId={clipWorkspace.clipId} />
+                )}
+              </Suspense>
+            </div>
           ) : (
             <>
               {activeTab === "home" ? (
@@ -381,7 +446,7 @@ export function StudioShell() {
                   </div>
 
                   {inspectedJob ? (
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -392,6 +457,15 @@ export function StudioShell() {
                       <JobTimelineView
                         job={inspectedJob}
                         onRequestDelete={setJobPendingDelete}
+                      />
+                      <ClipGridView
+                        job={inspectedJob}
+                        selectedClipId={resolvedClipId}
+                        activeClipDetail={activeClip}
+                        onSelectClipId={(clipId) => {
+                          setSelectedJobId(inspectedJob.id);
+                          setSelectedClipId(clipId);
+                        }}
                       />
                     </div>
                   ) : jobs.length === 0 ? (
@@ -421,7 +495,11 @@ export function StudioShell() {
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => setInspectedJobId(job.id)}
+                                onClick={() => {
+                                  setSelectedJobId(job.id);
+                                  setSelectedClipId(job.clips?.[0]?.id ?? null);
+                                  setInspectedJobId(job.id);
+                                }}
                               >
                                 {en.jobs.inspectTimeline}
                               </Button>
@@ -524,15 +602,33 @@ export function StudioShell() {
                     ) : (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {jobs.map((job) => (
-                          <Card key={job.id} variant="interactive">
+                          <Card
+                            key={job.id}
+                            variant="interactive"
+                            className="space-y-2"
+                          >
                             <CardHeader>
                               <CardTitle>{job.title ?? job.id}</CardTitle>
                               <Badge tone="route" size="sm">
                                 {job.source_kind}
                               </Badge>
                             </CardHeader>
-                            <CardContent className="text-xs text-text-dim">
-                              {job.language} · {job.clips?.length ?? 0} clips
+                            <CardContent className="flex items-center justify-between gap-2 text-xs text-text-dim">
+                              <span>
+                                {job.language} · {job.clips?.length ?? 0} clips
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setSelectedJobId(job.id);
+                                  setSelectedClipId(job.clips?.[0]?.id ?? null);
+                                  setInspectedJobId(job.id);
+                                  navigateToTab("jobs");
+                                }}
+                              >
+                                {en.jobs.inspectClips}
+                              </Button>
                             </CardContent>
                           </Card>
                         ))}

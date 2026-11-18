@@ -8,22 +8,38 @@ import {
   type SseStateEvent,
 } from "./sse";
 import type {
+  AdminActivatePromptPayload,
   AdminAuditResponse,
   AdminBlockersResponse,
   AdminBrandKitPayload,
   AdminBrandKitRecord,
   AdminBrandKitsResponse,
+  AdminDryRunScoringPayload,
+  AdminDryRunScoringResponse,
   AdminFontRecord,
   AdminFontsResponse,
   AdminPresetsResponse,
+  AdminPromptDetail,
+  AdminPromptsResponse,
+  AdminResolveBlockerPayload,
+  AdminScoringResponse,
   AdminSettingsResponse,
   AdminTemplatesResponse,
+  AdminTestPromptResponse,
+  AdminUpdatePromptPayload,
+  AdminUpdateScoringPayload,
+  AdminUpdateSettingsPayload,
+  Blocker,
   ClipDetail,
+  ClipFeedbackPayload,
+  ClipRendersResponse,
   CreateJobRequest,
   DriveFilesResponse,
   DrivePickPayload,
   DrivePickResponse,
   DriveStatus,
+  DriveSyncPayload,
+  DriveTreeResponse,
   HealthResponse,
   JobDetail,
   JobStatus,
@@ -32,14 +48,23 @@ import type {
   ListTemplatesQuery,
   PaginatedJobs,
   PatchClipPayload,
+  PatchTranscriptPayload,
   Preset,
   PresetListResponse,
   PreviewTemplatePayload,
+  PublishPack,
+  RegeneratePublishPackPayload,
+  RenderAllJobPayload,
+  RenderClipPayload,
+  RenderRecord,
+  ReselectJobPayload,
   RetryJobPayload,
   StageCheckpoint,
   StageName,
   TemplateListResponse,
   TemplateSummary,
+  Transcript,
+  UpdatePublishPackPayload,
 } from "./types";
 
 export const queryKeys = {
@@ -54,12 +79,19 @@ export const queryKeys = {
     ] as const,
   job: (id: string | null | undefined, sim: UiStateSimulation) =>
     ["job", id ?? null, sim] as const,
+  jobTranscript: (id: string | null | undefined, sim: UiStateSimulation) =>
+    ["job-transcript", id ?? null, sim] as const,
   clip: (id: string | null | undefined, sim: UiStateSimulation) =>
     ["clip", id ?? null, sim] as const,
+  clipRenders: (id: string | null | undefined, sim: UiStateSimulation) =>
+    ["clip-renders", id ?? null, sim] as const,
+  clipPublishPack: (id: string | null | undefined, sim: UiStateSimulation) =>
+    ["clip-publish-pack", id ?? null, sim] as const,
   templates: (sim: UiStateSimulation, params?: ListTemplatesQuery) =>
     ["templates", sim, params?.kind ?? null, params?.status ?? null] as const,
   presets: (sim: UiStateSimulation) => ["presets", sim] as const,
   driveStatus: (sim: UiStateSimulation) => ["drive-status", sim] as const,
+  driveTree: (sim: UiStateSimulation) => ["drive-tree", sim] as const,
   driveFiles: (
     sim: UiStateSimulation,
     route?: NonNullable<ListDriveFilesQuery>["route"]
@@ -70,11 +102,17 @@ export const queryKeys = {
   adminFonts: (sim: UiStateSimulation) => ["admin", "fonts", sim] as const,
   adminBrandKits: (sim: UiStateSimulation) =>
     ["admin", "brandkits", sim] as const,
+  adminPrompts: (sim: UiStateSimulation) => ["admin", "prompts", sim] as const,
+  adminPrompt: (name: string | null | undefined, sim: UiStateSimulation) =>
+    ["admin", "prompt", name ?? null, sim] as const,
+  adminScoring: (sim: UiStateSimulation) => ["admin", "scoring", sim] as const,
+  adminDrive: (sim: UiStateSimulation) => ["admin", "drive", sim] as const,
   adminBlockers: (sim: UiStateSimulation) =>
     ["admin", "blockers", sim] as const,
+  adminJobs: (sim: UiStateSimulation) => ["admin", "jobs", sim] as const,
   adminSettings: (sim: UiStateSimulation) =>
     ["admin", "settings", sim] as const,
-  adminAudit: (sim: UiStateSimulation, limit = 20) =>
+  adminAudit: (sim: UiStateSimulation, limit = 50) =>
     ["admin", "audit", sim, limit] as const,
 };
 
@@ -259,7 +297,299 @@ export function useDeleteJobMutation() {
     mutationFn: (id) => apiClient.deleteJob(id),
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
       void queryClient.removeQueries({ queryKey: ["job", id] });
+    },
+  });
+}
+
+export function useClipRendersQuery(
+  id: string | null | undefined,
+  options?: { enabled?: boolean }
+) {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<ClipRendersResponse, ApiError>({
+    queryKey: queryKeys.clipRenders(id, simulation),
+    queryFn: () => apiClient.listClipRenders(id!),
+    enabled:
+      Boolean(id) &&
+      (options?.enabled ?? true) &&
+      simulation !== "loading" &&
+      simulation !== "empty",
+    retry: false,
+  });
+}
+
+export function useSubmitClipFeedbackMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    ClipDetail,
+    ApiError,
+    { id: string; jobId: string; payload: ClipFeedbackPayload },
+    {
+      prevClips: Array<[readonly unknown[], ClipDetail | undefined]>;
+      prevJobs: Array<[readonly unknown[], PaginatedJobs | undefined]>;
+      prevJob: Array<[readonly unknown[], JobDetail | undefined]>;
+    }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.submitClipFeedback(id, payload),
+    onMutate: async ({ id, jobId, payload }) => {
+      await queryClient.cancelQueries({ queryKey: ["clip", id] });
+      await queryClient.cancelQueries({ queryKey: ["job", jobId] });
+      await queryClient.cancelQueries({ queryKey: ["jobs"] });
+
+      const prevClips = queryClient.getQueriesData<ClipDetail>({
+        queryKey: ["clip", id],
+      });
+      const prevJobs = queryClient.getQueriesData<PaginatedJobs>({
+        queryKey: ["jobs"],
+      });
+      const prevJob = queryClient.getQueriesData<JobDetail>({
+        queryKey: ["job", jobId],
+      });
+
+      queryClient.setQueriesData<ClipDetail>(
+        { queryKey: ["clip", id] },
+        (old) =>
+          old
+            ? {
+                ...old,
+                feedback: payload.value,
+                actual_views:
+                  payload.actual_views !== undefined
+                    ? payload.actual_views
+                    : old.actual_views,
+              }
+            : old
+      );
+
+      queryClient.setQueriesData<JobDetail>(
+        { queryKey: ["job", jobId] },
+        (old) =>
+          old
+            ? {
+                ...old,
+                clips: (old.clips ?? []).map((c) =>
+                  c.id === id
+                    ? {
+                        ...c,
+                        feedback: payload.value,
+                        actual_views:
+                          payload.actual_views !== undefined
+                            ? payload.actual_views
+                            : c.actual_views,
+                      }
+                    : c
+                ),
+              }
+            : old
+      );
+
+      queryClient.setQueriesData<PaginatedJobs>(
+        { queryKey: ["jobs"] },
+        (old) =>
+          old
+            ? {
+                ...old,
+                items: old.items.map((j) =>
+                  j.id === jobId
+                    ? {
+                        ...j,
+                        clips: (j.clips ?? []).map((c) =>
+                          c.id === id
+                            ? {
+                                ...c,
+                                feedback: payload.value,
+                                actual_views:
+                                  payload.actual_views !== undefined
+                                    ? payload.actual_views
+                                    : c.actual_views,
+                              }
+                            : c
+                        ),
+                      }
+                    : j
+                ),
+              }
+            : old
+      );
+
+      return { prevClips, prevJobs, prevJob };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return;
+      for (const [key, data] of ctx.prevClips) {
+        queryClient.setQueryData(key, data);
+      }
+      for (const [key, data] of ctx.prevJobs) {
+        queryClient.setQueryData(key, data);
+      }
+      for (const [key, data] of ctx.prevJob) {
+        queryClient.setQueryData(key, data);
+      }
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueriesData<ClipDetail>(
+        { queryKey: ["clip", updated.id] },
+        updated
+      );
+      void queryClient.invalidateQueries({ queryKey: ["job", updated.job_id] });
+      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "scoring"] });
+    },
+  });
+}
+
+export function useReselectJobClipsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    JobDetail,
+    ApiError,
+    { id: string; payload?: ReselectJobPayload }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.reselectJobClips(id, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueriesData<JobDetail>(
+        { queryKey: ["job", updated.id] },
+        updated
+      );
+      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["job", updated.id] });
+    },
+  });
+}
+
+export function useRenderAllJobClipsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    JobDetail,
+    ApiError,
+    { id: string; payload?: RenderAllJobPayload }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.renderAllJobClips(id, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueriesData<JobDetail>(
+        { queryKey: ["job", updated.id] },
+        updated
+      );
+      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["job", updated.id] });
+    },
+  });
+}
+
+export function useRenderClipMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    RenderRecord,
+    ApiError,
+    { id: string; payload?: RenderClipPayload }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.renderClip(id, payload),
+    onSuccess: (_rec, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["clip", vars.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ["clip-renders", vars.id],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+export function useJobTranscriptQuery(
+  jobId: string | null | undefined,
+  options?: { enabled?: boolean }
+) {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<Transcript, ApiError>({
+    queryKey: queryKeys.jobTranscript(jobId, simulation),
+    queryFn: () => apiClient.getJobTranscript(jobId!),
+    enabled:
+      Boolean(jobId) &&
+      (options?.enabled ?? true) &&
+      simulation !== "loading" &&
+      simulation !== "empty",
+    retry: false,
+  });
+}
+
+export function usePatchJobTranscriptMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    Transcript,
+    ApiError,
+    { jobId: string; payload: PatchTranscriptPayload }
+  >({
+    mutationFn: ({ jobId, payload }) =>
+      apiClient.patchJobTranscript(jobId, payload),
+    onSuccess: (updated, vars) => {
+      queryClient.setQueriesData<Transcript>(
+        { queryKey: ["job-transcript", vars.jobId] },
+        updated
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["job-transcript", vars.jobId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["job", vars.jobId] });
+    },
+  });
+}
+
+export function useClipPublishPackQuery(
+  clipId: string | null | undefined,
+  options?: { enabled?: boolean }
+) {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<PublishPack, ApiError>({
+    queryKey: queryKeys.clipPublishPack(clipId, simulation),
+    queryFn: () => apiClient.getClipPublishPack(clipId!),
+    enabled:
+      Boolean(clipId) &&
+      (options?.enabled ?? true) &&
+      simulation !== "loading" &&
+      simulation !== "empty",
+    retry: false,
+  });
+}
+
+export function useUpdateClipPublishPackMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    PublishPack,
+    ApiError,
+    { clipId: string; payload: UpdatePublishPackPayload }
+  >({
+    mutationFn: ({ clipId, payload }) =>
+      apiClient.updateClipPublishPack(clipId, payload),
+    onSuccess: (updated, vars) => {
+      queryClient.setQueriesData<PublishPack>(
+        { queryKey: ["clip-publish-pack", vars.clipId] },
+        updated
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["clip-publish-pack", vars.clipId],
+      });
+    },
+  });
+}
+
+export function useRegenerateClipPublishPackMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    PublishPack,
+    ApiError,
+    { clipId: string; payload?: RegeneratePublishPackPayload }
+  >({
+    mutationFn: ({ clipId, payload }) =>
+      apiClient.regenerateClipPublishPack(clipId, payload),
+    onSuccess: (updated, vars) => {
+      queryClient.setQueriesData<PublishPack>(
+        { queryKey: ["clip-publish-pack", vars.clipId] },
+        updated
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["clip-publish-pack", vars.clipId],
+      });
     },
   });
 }
@@ -625,11 +955,163 @@ export function useAdminSaveBrandKitMutation() {
   });
 }
 
+export function useAdminPromptsQuery() {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<AdminPromptsResponse, ApiError>({
+    queryKey: queryKeys.adminPrompts(simulation),
+    queryFn: () => apiClient.adminListPrompts(),
+    retry: false,
+  });
+}
+
+export function useAdminPromptDetailQuery(name: string | null | undefined) {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<AdminPromptDetail, ApiError>({
+    queryKey: queryKeys.adminPrompt(name, simulation),
+    queryFn: () => apiClient.adminGetPrompt(name!),
+    enabled: Boolean(name) && simulation !== "loading" && simulation !== "empty",
+    retry: false,
+  });
+}
+
+export function useAdminUpdatePromptMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AdminPromptDetail,
+    ApiError,
+    { name: string; payload: AdminUpdatePromptPayload }
+  >({
+    mutationFn: ({ name, payload }) => apiClient.adminUpdatePrompt(name, payload),
+    onSuccess: (_data, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "prompts"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["admin", "prompt", vars.name],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+    },
+  });
+}
+
+export function useAdminActivatePromptMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AdminPromptDetail,
+    ApiError,
+    { name: string; payload: AdminActivatePromptPayload }
+  >({
+    mutationFn: ({ name, payload }) =>
+      apiClient.adminActivatePrompt(name, payload),
+    onSuccess: (_data, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "prompts"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["admin", "prompt", vars.name],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+    },
+  });
+}
+
+export function useAdminTestPromptMutation() {
+  return useMutation<AdminTestPromptResponse, ApiError, string>({
+    mutationFn: (name) => apiClient.adminTestPrompt(name),
+  });
+}
+
+export function useAdminScoringQuery() {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<AdminScoringResponse, ApiError>({
+    queryKey: queryKeys.adminScoring(simulation),
+    queryFn: () => apiClient.adminGetScoring(),
+    retry: false,
+  });
+}
+
+export function useAdminUpdateScoringMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AdminScoringResponse,
+    ApiError,
+    AdminUpdateScoringPayload
+  >({
+    mutationFn: (payload) => apiClient.adminUpdateScoring(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "scoring"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+    },
+  });
+}
+
+export function useAdminDryRunScoringMutation() {
+  return useMutation<
+    AdminDryRunScoringResponse,
+    ApiError,
+    AdminDryRunScoringPayload
+  >({
+    mutationFn: (payload) => apiClient.adminDryRunScoring(payload),
+  });
+}
+
+export function useAdminDriveQuery() {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<DriveStatus, ApiError>({
+    queryKey: queryKeys.adminDrive(simulation),
+    queryFn: () => apiClient.adminGetDrive(),
+    retry: false,
+  });
+}
+
+export function useDriveTreeQuery() {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<DriveTreeResponse, ApiError>({
+    queryKey: queryKeys.driveTree(simulation),
+    queryFn: () => apiClient.getDriveTree(),
+    enabled: simulation !== "loading" && simulation !== "empty",
+    retry: false,
+  });
+}
+
+export function useTriggerDriveSyncMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<DriveStatus, ApiError, DriveSyncPayload | undefined>({
+    mutationFn: (payload) => apiClient.triggerDriveSync(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "drive"] });
+      void queryClient.invalidateQueries({ queryKey: ["drive-status"] });
+      void queryClient.invalidateQueries({ queryKey: ["drive-tree"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+    },
+  });
+}
+
 export function useAdminBlockersQuery() {
   const simulation = useStudioStore((s) => s.simulation);
   return useQuery<AdminBlockersResponse, ApiError>({
     queryKey: queryKeys.adminBlockers(simulation),
     queryFn: () => apiClient.adminListBlockers(),
+    retry: false,
+  });
+}
+
+export function useAdminResolveBlockerMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    Blocker,
+    ApiError,
+    { id: string; payload?: AdminResolveBlockerPayload }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.adminResolveBlocker(id, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "blockers"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+    },
+  });
+}
+
+export function useAdminJobsQuery() {
+  const simulation = useStudioStore((s) => s.simulation);
+  return useQuery<PaginatedJobs, ApiError>({
+    queryKey: queryKeys.adminJobs(simulation),
+    queryFn: () => apiClient.adminListJobs(),
     retry: false,
   });
 }
@@ -643,7 +1125,23 @@ export function useAdminSettingsQuery() {
   });
 }
 
-export function useAdminAuditQuery(limit = 20) {
+export function useAdminUpdateSettingsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AdminSettingsResponse,
+    ApiError,
+    AdminUpdateSettingsPayload
+  >({
+    mutationFn: (payload) => apiClient.adminUpdateSettings(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+      void queryClient.invalidateQueries({ queryKey: ["health"] });
+    },
+  });
+}
+
+export function useAdminAuditQuery(limit = 50) {
   const simulation = useStudioStore((s) => s.simulation);
   return useQuery<AdminAuditResponse, ApiError>({
     queryKey: queryKeys.adminAudit(simulation, limit),

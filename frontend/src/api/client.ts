@@ -1,20 +1,36 @@
 import type {
+  AdminActivatePromptPayload,
   AdminAuditResponse,
   AdminBlockersResponse,
   AdminBrandKitPayload,
   AdminBrandKitRecord,
   AdminBrandKitsResponse,
+  AdminDryRunScoringPayload,
+  AdminDryRunScoringResponse,
   AdminFontRecord,
   AdminFontsResponse,
   AdminPresetsResponse,
+  AdminPromptDetail,
+  AdminPromptsResponse,
+  AdminResolveBlockerPayload,
+  AdminScoringResponse,
   AdminSettingsResponse,
   AdminTemplatesResponse,
+  AdminTestPromptResponse,
+  AdminUpdatePromptPayload,
+  AdminUpdateScoringPayload,
+  AdminUpdateSettingsPayload,
+  Blocker,
   ClipDetail,
+  ClipFeedbackPayload,
+  ClipRendersResponse,
   CreateJobRequest,
   DriveFilesResponse,
   DrivePickPayload,
   DrivePickResponse,
   DriveStatus,
+  DriveSyncPayload,
+  DriveTreeResponse,
   ErrorEnvelope,
   HealthResponse,
   InitUploadPayload,
@@ -24,13 +40,22 @@ import type {
   ListTemplatesQuery,
   PaginatedJobs,
   PatchClipPayload,
+  PatchTranscriptPayload,
   Preset,
   PresetListResponse,
   PreviewTemplatePayload,
+  PublishPack,
+  RegeneratePublishPackPayload,
+  RenderAllJobPayload,
+  RenderClipPayload,
+  RenderRecord,
+  ReselectJobPayload,
   RetryJobPayload,
   TemplateListResponse,
   TemplateSummary,
   TemplateVersionsResponse,
+  Transcript,
+  UpdatePublishPackPayload,
   UploadSession,
 } from "./types";
 
@@ -183,8 +208,41 @@ export const apiClient = {
       method: "POST",
     }),
 
+  reselectJobClips: (
+    id: string,
+    payload?: ReselectJobPayload
+  ): Promise<JobDetail> =>
+    request<JobDetail>(`/jobs/${encodeURIComponent(id)}/reselect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    }),
+
+  renderAllJobClips: (
+    id: string,
+    payload?: RenderAllJobPayload
+  ): Promise<JobDetail> =>
+    request<JobDetail>(`/jobs/${encodeURIComponent(id)}/render-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    }),
+
   downloadJobZipUrl: (id: string): string =>
     `${API_BASE}/jobs/${encodeURIComponent(id)}/download.zip`,
+
+  getJobTranscript: (id: string): Promise<Transcript> =>
+    request<Transcript>(`/jobs/${encodeURIComponent(id)}/transcript`),
+
+  patchJobTranscript: (
+    id: string,
+    payload: PatchTranscriptPayload
+  ): Promise<Transcript> =>
+    request<Transcript>(`/jobs/${encodeURIComponent(id)}/transcript`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 
   initUpload: (payload: InitUploadPayload): Promise<UploadSession> =>
     request<UploadSession>("/uploads", {
@@ -221,6 +279,55 @@ export const apiClient = {
       headers: { "Content-Type": "application/merge-patch+json" },
       body: JSON.stringify(patch),
     }),
+
+  renderClip: (
+    id: string,
+    payload?: RenderClipPayload
+  ): Promise<RenderRecord> =>
+    request<RenderRecord>(`/clips/${encodeURIComponent(id)}/render`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    }),
+
+  listClipRenders: (id: string): Promise<ClipRendersResponse> =>
+    request<ClipRendersResponse>(`/clips/${encodeURIComponent(id)}/renders`),
+
+  submitClipFeedback: (
+    id: string,
+    payload: ClipFeedbackPayload
+  ): Promise<ClipDetail> =>
+    request<ClipDetail>(`/clips/${encodeURIComponent(id)}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  getClipPublishPack: (id: string): Promise<PublishPack> =>
+    request<PublishPack>(`/clips/${encodeURIComponent(id)}/publish-pack`),
+
+  updateClipPublishPack: (
+    id: string,
+    payload: UpdatePublishPackPayload
+  ): Promise<PublishPack> =>
+    request<PublishPack>(`/clips/${encodeURIComponent(id)}/publish-pack`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  regenerateClipPublishPack: (
+    id: string,
+    payload?: RegeneratePublishPackPayload
+  ): Promise<PublishPack> =>
+    request<PublishPack>(
+      `/clips/${encodeURIComponent(id)}/publish-pack/regenerate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload ?? {}),
+      }
+    ),
 
   listTemplates: (params?: ListTemplatesQuery): Promise<TemplateListResponse> =>
     request<TemplateListResponse>(
@@ -350,8 +457,87 @@ export const apiClient = {
       body: JSON.stringify(payload),
     }),
 
+  adminListPrompts: (): Promise<AdminPromptsResponse> =>
+    request<AdminPromptsResponse>("/admin/prompts"),
+
+  adminGetPrompt: (name: string): Promise<AdminPromptDetail> =>
+    request<AdminPromptDetail>(`/admin/prompts/${encodeURIComponent(name)}`),
+
+  adminUpdatePrompt: (
+    name: string,
+    payload: AdminUpdatePromptPayload
+  ): Promise<AdminPromptDetail> =>
+    request<AdminPromptDetail>(`/admin/prompts/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminActivatePrompt: (
+    name: string,
+    payload: AdminActivatePromptPayload
+  ): Promise<AdminPromptDetail> =>
+    request<AdminPromptDetail>(
+      `/admin/prompts/${encodeURIComponent(name)}/activate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  adminTestPrompt: (name: string): Promise<AdminTestPromptResponse> =>
+    request<AdminTestPromptResponse>(
+      `/admin/prompts/${encodeURIComponent(name)}/test`,
+      { method: "POST" }
+    ),
+
+  adminGetScoring: (): Promise<AdminScoringResponse> =>
+    request<AdminScoringResponse>("/admin/scoring"),
+
+  adminUpdateScoring: (
+    payload: AdminUpdateScoringPayload
+  ): Promise<AdminScoringResponse> =>
+    request<AdminScoringResponse>("/admin/scoring", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminDryRunScoring: (
+    payload: AdminDryRunScoringPayload
+  ): Promise<AdminDryRunScoringResponse> =>
+    request<AdminDryRunScoringResponse>("/admin/scoring/dry-run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminGetDrive: (): Promise<DriveStatus> =>
+    request<DriveStatus>("/admin/drive"),
+
+  triggerDriveSync: (payload?: DriveSyncPayload): Promise<DriveStatus> =>
+    request<DriveStatus>("/drive/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? { full: false }),
+    }),
+
+  getDriveTree: (): Promise<DriveTreeResponse> =>
+    request<DriveTreeResponse>("/drive/tree"),
+
   adminListBlockers: (): Promise<AdminBlockersResponse> =>
     request<AdminBlockersResponse>("/admin/blockers"),
+
+  adminResolveBlocker: (
+    id: string,
+    payload?: AdminResolveBlockerPayload
+  ): Promise<Blocker> =>
+    request<Blocker>(`/admin/blockers/${encodeURIComponent(id)}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    }),
 
   adminListJobs: (): Promise<PaginatedJobs> =>
     request<PaginatedJobs>("/admin/jobs"),
@@ -359,6 +545,15 @@ export const apiClient = {
   adminGetSettings: (): Promise<AdminSettingsResponse> =>
     request<AdminSettingsResponse>("/admin/settings"),
 
-  adminAuditLog: (limit = 20): Promise<AdminAuditResponse> =>
+  adminUpdateSettings: (
+    payload: AdminUpdateSettingsPayload
+  ): Promise<AdminSettingsResponse> =>
+    request<AdminSettingsResponse>("/admin/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  adminAuditLog: (limit = 50): Promise<AdminAuditResponse> =>
     request<AdminAuditResponse>(`/admin/audit${buildQueryString({ limit })}`),
 };

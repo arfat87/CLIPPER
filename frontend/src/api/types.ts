@@ -75,5 +75,47 @@ export type AdminBrandKitRecord =
   operations["adminCreateBrandKit"]["responses"][201]["content"]["application/json"];
 export type AdminPromptsResponse =
   operations["adminListPrompts"]["responses"][200]["content"]["application/json"];
+export type AdminPromptDetail =
+  operations["adminGetPrompt"]["responses"][200]["content"]["application/json"];
+export type AdminUpdatePromptPayload =
+  operations["adminUpdatePrompt"]["requestBody"]["content"]["application/json"];
+export type AdminActivatePromptPayload =
+  operations["adminActivatePrompt"]["requestBody"]["content"]["application/json"];
+export type AdminTestPromptResponse =
+  operations["adminTestPrompt"]["responses"][200]["content"]["application/json"];
 export type AdminScoringResponse =
   operations["adminGetScoring"]["responses"][200]["content"]["application/json"];
+export type AdminUpdateScoringPayload =
+  operations["adminUpdateScoring"]["requestBody"]["content"]["application/json"];
+export type AdminDryRunScoringPayload =
+  operations["adminDryRunScoring"]["requestBody"]["content"]["application/json"];
+export type AdminDryRunScoringResponse =
+  operations["adminDryRunScoring"]["responses"][200]["content"]["application/json"];
+export type AdminUpdateSettingsPayload =
+  operations["adminUpdateSettings"]["requestBody"]["content"]["application/json"];
+export type DriveSyncPayload =
+  NonNullable<operations["triggerDriveSync"]["requestBody"]>["content"]["application/json"];
+export type DriveTreeResponse =
+  operations["getDriveTree"]["responses"][200]["content"]["application/json"];
+export type AdminResolveBlockerPayload =
+  NonNullable<operations["adminResolveBlocker"]["requestBody"]>["content"]["application/json"];
+
+export type ClipFeedbackPayload =
+  operations["submitClipFeedback"]["requestBody"]["content"]["application/json"];
+export type ReselectJobPayload =
+  NonNullable<operations["reselectJobClips"]["requestBody"]>["content"]["application/json"];
+export type RenderAllJobPayload =
+  NonNullable<operations["renderAllJobClips"]["requestBody"]>["content"]["application/json"];
+export type RenderClipPayload =
+  NonNullable<operations["renderClip"]["requestBody"]>["content"]["application/json"];
+export type ClipRendersResponse =
+  operations["listClipRenders"]["responses"][200]["content"]["application/json"];
+
+export type PatchTranscriptPayload =
+  operations["patchJobTranscript"]["requestBody"]["content"]["application/json"];
+export type UpdatePublishPackPayload =
+  operations["updateClipPublishPack"]["requestBody"]["content"]["application/json"];
+export type RegeneratePublishPackPayload =
+  NonNullable<operations["regenerateClipPublishPack"]["requestBody"]>["content"]["application/json"];
+
+

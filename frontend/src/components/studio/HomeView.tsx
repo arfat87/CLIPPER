@@ -31,9 +31,9 @@ import {
   Badge,
   Button,
   Card,
-  StatusBadge,
   useToast,
 } from "../ui";
+import { ClipGridView } from "./ClipGridView";
 import { JobTimelineView } from "./JobTimelineView";
 import { detectVideoPlatform } from "./urlDetect";
 
@@ -573,67 +573,16 @@ export function HomeView({
         />
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Ranked Clips */}
-          <section
-            aria-labelledby="clips-heading"
-            className="space-y-3 lg:col-span-7"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h2 id="clips-heading" className="text-base font-bold">
-                  {en.home.clipsTitle} · {activeJob?.title ?? "Untitled"}
-                </h2>
-                <p className="text-xs text-text-dim">
-                  {activeJob?.platform?.toUpperCase() ?? "SOURCE"} ·{" "}
-                  {activeJob?.language.toUpperCase()} ·{" "}
-                  {activeJob?.clips?.length ?? 0} clips
-                </p>
-              </div>
-              {activeJob ? <StatusBadge status={activeJob.status} /> : null}
-            </div>
-
-            <div className="space-y-3">
-              {(activeJob?.clips ?? []).map((clip) => {
-                const selected = clip.id === resolvedClipId;
-                const scorePct = Math.round(clip.score * 100);
-                return (
-                  <button
-                    key={clip.id}
-                    type="button"
-                    onClick={() => onSelectClipId(clip.id)}
-                    className={`w-full rounded-lg border p-4 text-left transition ${
-                      selected
-                        ? "border-accent bg-surface"
-                        : "border-border bg-surface/60 hover:border-text-dim"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Badge tone="accent" size="sm">
-                          #{clip.rank} · {scorePct}/100
-                        </Badge>
-                        <span className="text-xs text-text-dim">
-                          {clip.start_s}s – {clip.end_s}s
-                        </span>
-                      </div>
-                      <StatusBadge status={clip.status} />
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-text">
-                      {clip.title ?? "Untitled Clip"}
-                    </p>
-                    {clip.reason ? (
-                      <p className="mt-1 text-xs text-text-dim">
-                        <span className="font-semibold text-text">
-                          {en.home.scoreWhy}:
-                        </span>{" "}
-                        {clip.reason}
-                      </p>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          {/* Ranked Clips Grid */}
+          <div className="lg:col-span-7">
+            <ClipGridView
+              job={activeJob}
+              selectedClipId={resolvedClipId}
+              activeClipDetail={activeClip}
+              requestedMaxClips={maxClips}
+              onSelectClipId={onSelectClipId}
+            />
+          </div>
 
           {/* 9:16 Live Preview */}
           <Card aria-labelledby="preview-heading" className="space-y-4 lg:col-span-5">
