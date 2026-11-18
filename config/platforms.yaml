@@ -1,0 +1,16 @@
+version: 1
+# verify: re-check against official platform docs every quarter (limits change). Last checked 2026-11-18 via secondary sources.
+safe_areas:
+  shorts_default:   { top_pct: 12, bottom_pct: 25, left_pct: 6, right_pct: 12 }   # conservative; public sources disagree (bottom UI ~14-30%)
+  reels_default:    { top_pct: 14, bottom_pct: 25, left_pct: 6, right_pct: 12 }
+  tiktok_default:   { top_pct: 14, bottom_pct: 28, left_pct: 6, right_pct: 14 }
+  none:             { top_pct: 0,  bottom_pct: 0,  left_pct: 0, right_pct: 0 }
+youtube_shorts:
+  max_duration_s: 180
+  title: { max_chars: 100, target_chars: 70 }
+  description: { max_chars: 5000, first_visible_chars: 100 }
+  hashtags: { recommended: [3, 5], max_per_video: 15, top_shown: 3 }
+  tags: { max_total_chars: 500 }
+instagram_reels: { caption_max_chars: 2200, hashtags_recommended: [3, 8] }
+tiktok:          { caption_recommended_chars: 150, hashtags_recommended: [3, 5] }
+facebook_reels:  { title_max_chars: 65, hashtags_recommended: [3, 5] }

@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "meta": {
+    "id": "neon_glow",
+    "name": "Neon Glow",
+    "version": 1,
+    "author": "starter",
+    "license": "Template: MIT. Fonts: SIL OFL 1.1 (verify files at install)",
+    "tags": [
+      "neon",
+      "gaming",
+      "tech"
+    ]
+  },
+  "aspects": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": {
+      "family": "Bebas Neue",
+      "weight": 400,
+      "fallback": [
+        "Noto Sans"
+      ]
+    },
+    "deva": {
+      "family": "Mukta",
+      "weight": 800,
+      "fallback": [
+        "Noto Sans Devanagari"
+      ]
+    },
+    "beng": {
+      "family": "Hind Siliguri",
+      "weight": 700,
+      "fallback": [
+        "Noto Sans Bengali"
+      ]
+    }
+  },
+  "text": {
+    "size_px": 88,
+    "case": "upper",
+    "letter_spacing_px": 1,
+    "line_height": 1.15
+  },
+  "colors": {
+    "primary": "#E8FFFF",
+    "active": "#FF2BD6",
+    "outline": "#00E5FF",
+    "shadow": "#00E5FF99",
+    "box": null
+  },
+  "stroke": {
+    "outline_px": 3,
+    "shadow_px": 8,
+    "shadow_offset": [
+      0,
+      0
+    ],
+    "glow": {
+      "enabled": true,
+      "color": "#00E5FF",
+      "radius_px": 14
+    }
+  },
+  "box": {
+    "enabled": false,
+    "padding_px": 16,
+    "radius_px": 12,
+    "opacity": 0.85
+  },
+  "layout": {
+    "anchor": "bottom_center",
+    "y_percent": 66,
+    "align": "center",
+    "max_words_per_line": 3,
+    "max_lines": 2,
+    "max_chars": {
+      "latn": 20,
+      "deva": 16,
+      "beng": 16
+    },
+    "safe_area_profile": "shorts_default"
+  },
+  "animation": {
+    "mode": "pages",
+    "active_word": "highlight",
+    "in": "pop",
+    "out": "none",
+    "duration_ms": 140,
+    "easing": "ease_out"
+  },
+  "emphasis": {
+    "keywords_bold": false,
+    "keyword_color": null,
+    "numbers_color": null
+  },
+  "emoji": {
+    "enabled": false
+  },
+  "speaker_colors": {
+    "enabled": false,
+    "palette": []
+  }
+}

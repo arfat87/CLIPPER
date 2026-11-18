@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clipper.local/schemas/publish_pack.schema.json",
+  "title": "PublishPack",
+  "type": "object",
+  "required": ["schema_version", "clip_id", "platform", "language", "title", "description", "hashtags", "valid"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "clip_id": { "type": "string" },
+    "platform": { "enum": ["youtube_shorts", "instagram_reels", "tiktok", "facebook_reels"] },
+    "language": { "enum": ["en", "hi", "hinglish", "bn"] },
+    "title": { "type": "string", "maxLength": 100 },
+    "title_options": { "type": "array", "items": { "type": "string", "maxLength": 100 }, "maxItems": 5 },
+    "description": { "type": "string", "maxLength": 5000 },
+    "hashtags": { "type": "array", "items": { "type": "string", "pattern": "^#\\S+$" }, "maxItems": 15 },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "pinned_comment": { "type": ["string", "null"] },
+    "hook_line": { "type": ["string", "null"] },
+    "transcript_txt": { "type": "string" },
+    "files": {
+      "type": "object",
+      "properties": {
+        "srt": { "type": "string" }, "vtt": { "type": "string" }, "ass": { "type": "string" },
+        "thumb": { "type": "string" }, "transcript_txt": { "type": "string" }
+      }
+    },
+    "valid": { "type": "boolean" },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "template": { "type": "string" },
+    "produced_by": { "type": "object" }
+  }
+}

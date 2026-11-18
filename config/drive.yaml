@@ -1,0 +1,24 @@
+version: 1
+enabled: false
+auth: service_account            # service_account | oauth_desktop (see docs/05_drive)
+root_folder_id: ""               # set in .env DRIVE_ROOT_FOLDER_ID
+poll_minutes: 5
+max_download_mb: 8192
+page_size: 1000
+mirror_dir: drive_mirror
+read_only: true
+routing:                         # first match wins; folder names are case-insensitive prefixes
+  - { match: "01_Sources",   route: source }
+  - { match: "02_Templates", route: template }
+  - { match: "03_Fonts",     route: font }
+  - { match: "04_BrandKits", route: brandkit }
+  - { match: "05_Docs",      route: doc }
+  - { match: "06_Reference", route: reference }
+  - { match: "07_Exports",   route: export }
+  - { match: "*",            route: unsorted }
+export_map:                      # native Google files cannot be downloaded raw; they must be exported
+  "application/vnd.google-apps.document":     "text/markdown"      # fallback: text/plain, then docx via pandoc
+  "application/vnd.google-apps.spreadsheet":  "text/csv"           # first sheet only; use docx/xlsx export for all sheets
+  "application/vnd.google-apps.presentation": "application/pdf"
+video_mimes: ["video/mp4", "video/quicktime", "video/webm", "video/x-matroska"]
+skip_extensions: [".tmp", ".part", ".crdownload"]

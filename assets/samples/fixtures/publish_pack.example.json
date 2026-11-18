@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "clip_id": "01JFIXTURE0000000000000001",
+  "platform": "youtube_shorts",
+  "language": "hinglish",
+  "title": "Ek badi baat jo koi nahi batata",
+  "title_options": [
+    "Ek badi baat jo koi nahi batata",
+    "Yeh sach sunke chaunk jaoge"
+  ],
+  "description": "Ek badi baat jo koi nahi batata. Poora video dekhiye.\n\n#Shorts #Motivation #Hinglish",
+  "hashtags": [
+    "#Shorts",
+    "#Motivation",
+    "#Hinglish"
+  ],
+  "tags": [
+    "motivation",
+    "hinglish"
+  ],
+  "pinned_comment": "Aapko kya lagta hai?",
+  "hook_line": "Ek badi baat",
+  "transcript_txt": "Dosto aaj main aapko ek badi baat batane wala hoon",
+  "files": {
+    "srt": "captions.srt"
+  },
+  "valid": true,
+  "warnings": []
+}

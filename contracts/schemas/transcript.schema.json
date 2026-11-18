@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clipper.local/schemas/transcript.schema.json",
+  "title": "Transcript",
+  "type": "object",
+  "required": ["schema_version", "language", "script", "duration", "engine", "segments"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "language": { "enum": ["en", "hi", "hinglish", "bn"] },
+    "script": { "enum": ["latn", "deva", "beng"] },
+    "duration": { "type": "number", "minimum": 0 },
+    "engine": { "type": "string" },
+    "model_id": { "type": "string" },
+    "mean_conf": { "type": "number", "minimum": 0, "maximum": 1 },
+    "edited": { "type": "boolean" },
+    "produced_by": { "type": "object" },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "start", "end", "text", "words"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "text": { "type": "string" },
+          "speaker": { "type": ["string", "null"] },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["w", "s", "e"],
+              "properties": {
+                "w": { "type": "string", "minLength": 1 },
+                "s": { "type": "number", "minimum": 0 },
+                "e": { "type": "number", "minimum": 0 },
+                "p": { "type": "number", "minimum": 0, "maximum": 1 },
+                "flags": { "type": "array", "items": { "enum": ["low_conf", "edited", "interpolated"] } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

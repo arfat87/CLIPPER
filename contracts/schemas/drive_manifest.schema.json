@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clipper.local/schemas/drive_manifest.schema.json",
+  "title": "DriveManifest",
+  "type": "object",
+  "required": ["schema_version", "root_folder_id", "generated_at", "start_page_token", "files"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "root_folder_id": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "start_page_token": { "type": "string" },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "files": { "type": "integer" }, "folders": { "type": "integer" }, "bytes": { "type": "integer" },
+        "unsorted": { "type": "integer" }, "errors": { "type": "integer" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "mime", "path", "route", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "mime": { "type": "string" },
+          "is_folder": { "type": "boolean" },
+          "path": { "type": "string", "description": "path inside the Drive workspace, forward slashes" },
+          "mirror_path": { "type": ["string", "null"] },
+          "size": { "type": ["integer", "null"] },
+          "md5": { "type": ["string", "null"] },
+          "modified_time": { "type": "string" },
+          "head_revision_id": { "type": ["string", "null"] },
+          "route": { "enum": ["source", "template", "font", "brandkit", "doc", "reference", "export", "unsorted"] },
+          "status": { "enum": ["SYNCED", "STALE", "REMOVED", "ERROR", "SKIPPED"] },
+          "error": { "type": ["string", "null"] },
+          "exported_as": { "type": ["string", "null"], "description": "mime used to export native Google files" }
+        }
+      }
+    }
+  }
+}

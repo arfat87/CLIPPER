@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "language": "hinglish",
+  "script": "latn",
+  "duration": 12.0,
+  "engine": "fixture",
+  "model_id": "none",
+  "mean_conf": 0.92,
+  "edited": false,
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.4,
+      "end": 4.2,
+      "text": "Dosto aaj main aapko ek badi baat batane wala hoon",
+      "speaker": null,
+      "words": [
+        {
+          "w": "Dosto",
+          "s": 0.4,
+          "e": 0.9,
+          "p": 0.95
+        },
+        {
+          "w": "aaj",
+          "s": 0.95,
+          "e": 1.2,
+          "p": 0.93
+        },
+        {
+          "w": "main",
+          "s": 1.25,
+          "e": 1.5,
+          "p": 0.96
+        },
+        {
+          "w": "aapko",
+          "s": 1.55,
+          "e": 1.95,
+          "p": 0.9
+        },
+        {
+          "w": "ek",
+          "s": 2.0,
+          "e": 2.2,
+          "p": 0.97
+        },
+        {
+          "w": "badi",
+          "s": 2.25,
+          "e": 2.6,
+          "p": 0.94
+        },
+        {
+          "w": "baat",
+          "s": 2.65,
+          "e": 3.0,
+          "p": 0.95
+        },
+        {
+          "w": "batane",
+          "s": 3.05,
+          "e": 3.5,
+          "p": 0.9
+        },
+        {
+          "w": "wala",
+          "s": 3.55,
+          "e": 3.8,
+          "p": 0.92
+        },
+        {
+          "w": "hoon",
+          "s": 3.85,
+          "e": 4.2,
+          "p": 0.96
+        }
+      ]
+    }
+  ]
+}

@@ -19,3 +19,7 @@
 - **[DONE] Phase 6–7 (Web Studio UI & Verification):**
   - `T-6.1–6.5` Interactive Clip Studio UI (`frontend/index.html`) with 9:16 vertical player, instant CSS caption preview, tap-to-select template carousel, trim/layout editor, and HITL dashboard
   - `T-7.1` End-to-end test suite (`backend/tests/test_clipper_e2e.py`) passing
+- **[DONE] Spec Pack v2 Sync (from Google Drive `CLIPPER/clipper-spec.zip`):**
+  - Synced `docs/` (10 architectural modules + original blueprint), `contracts/schemas/*.json`, `.agents/rules/*`, `.agents/skills/*`, `.clipper-state/tasks.yaml`, `config/prompts/*.md`, `config/{drive,platforms}.yaml`, `assets/samples/fixtures/*`, `BLOCKERS.md`, and `DECISIONS.md`.
+  - Preserved v1 runtime compatibility (`config/{asr,highlights,render}.yaml` and `assets/templates/*/template.json`); placed v2 starter templates under `assets/templates_v2/` and v2 configs under `config/spec_v2/` pending Phase 6 schema migration (`T-6.3`).
+

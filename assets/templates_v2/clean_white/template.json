@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "meta": {
+    "id": "clean_white",
+    "name": "Clean White",
+    "version": 1,
+    "author": "starter",
+    "license": "Template: MIT. Fonts: SIL OFL 1.1 (verify files at install)",
+    "tags": [
+      "clean",
+      "interview"
+    ]
+  },
+  "aspects": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": {
+      "family": "Poppins",
+      "weight": 700,
+      "fallback": [
+        "Noto Sans"
+      ]
+    },
+    "deva": {
+      "family": "Noto Sans Devanagari",
+      "weight": 700,
+      "fallback": [
+        "Mukta"
+      ]
+    },
+    "beng": {
+      "family": "Noto Sans Bengali",
+      "weight": 700,
+      "fallback": [
+        "Hind Siliguri"
+      ]
+    }
+  },
+  "text": {
+    "size_px": 66,
+    "case": "none",
+    "letter_spacing_px": 0,
+    "line_height": 1.15
+  },
+  "colors": {
+    "primary": "#FFFFFF",
+    "active": "#FFFFFF",
+    "outline": "#000000",
+    "shadow": "#00000099",
+    "box": null
+  },
+  "stroke": {
+    "outline_px": 3,
+    "shadow_px": 2,
+    "shadow_offset": [
+      2,
+      2
+    ]
+  },
+  "box": {
+    "enabled": false,
+    "padding_px": 16,
+    "radius_px": 12,
+    "opacity": 0.85
+  },
+  "layout": {
+    "anchor": "bottom_center",
+    "y_percent": 66,
+    "align": "center",
+    "max_words_per_line": 4,
+    "max_lines": 2,
+    "max_chars": {
+      "latn": 26,
+      "deva": 20,
+      "beng": 20
+    },
+    "safe_area_profile": "shorts_default"
+  },
+  "animation": {
+    "mode": "pages",
+    "active_word": "none",
+    "in": "fade",
+    "out": "fade",
+    "duration_ms": 120,
+    "easing": "ease_out"
+  },
+  "emphasis": {
+    "keywords_bold": false,
+    "keyword_color": null,
+    "numbers_color": null
+  },
+  "emoji": {
+    "enabled": false
+  },
+  "speaker_colors": {
+    "enabled": false,
+    "palette": []
+  }
+}

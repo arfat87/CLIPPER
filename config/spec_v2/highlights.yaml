@@ -1,0 +1,30 @@
+version: 1
+windows: { min_len_s: 20, max_len_s: 60, target_len_s: 35, pause_split_s: 0.6 }
+selection:
+  threshold: 0.62
+  min_clips: 3
+  min_candidate_floor: 0.45
+  max_clips: 12
+  nms_overlap: 0.30
+  semantic_dedupe_cosine: 0.90
+  diversity: { max_per_region_s: 180, max_per_region: 2, max_per_topic: 2 }
+llm:
+  map_chunk_minutes: 8
+  map_overlap_s: 60
+  reduce_top_n: 30
+  temperature: 0.2
+  max_tokens_per_job: 400000
+  dimension_weights: { hook: 0.25, payoff: 0.25, standalone: 0.20, emotion: 0.10, shareability: 0.10, quotability: 0.10 }
+weights:                    # fusion weights S = sum(w*f); missing features redistribute to llm
+  default:        { llm: 0.55, energy: 0.10, speech_rate: 0.07, reaction: 0.08, scene: 0.05, heatmap: 0.10, asr_conf: 0.05 }
+  podcast:        { llm: 0.65, energy: 0.08, speech_rate: 0.05, reaction: 0.08, scene: 0.01, heatmap: 0.08, asr_conf: 0.05 }
+  interview:      { llm: 0.65, energy: 0.08, speech_rate: 0.05, reaction: 0.08, scene: 0.01, heatmap: 0.08, asr_conf: 0.05 }
+  solo_talk:      { llm: 0.55, energy: 0.12, speech_rate: 0.10, reaction: 0.03, scene: 0.05, heatmap: 0.10, asr_conf: 0.05 }
+  lecture:        { llm: 0.70, energy: 0.05, speech_rate: 0.05, reaction: 0.02, scene: 0.03, heatmap: 0.10, asr_conf: 0.05 }
+  gaming:         { llm: 0.35, energy: 0.20, speech_rate: 0.10, reaction: 0.10, scene: 0.15, heatmap: 0.05, asr_conf: 0.05 }
+  screenshare_tutorial: { llm: 0.60, energy: 0.05, speech_rate: 0.05, reaction: 0.02, scene: 0.13, heatmap: 0.10, asr_conf: 0.05 }
+genre_overrides:
+  lecture: { min_len_s: 40, max_len_s: 90, target_len_s: 55 }
+  gaming:  { min_len_s: 15, max_len_s: 45, target_len_s: 28 }
+visual_analysis: { enabled_genres: [gaming, screenshare_tutorial, vlog], max_frames_per_job: 120, frame_interval_s: 2.5 }
+boundaries: { start_search_s: 2.0, end_tail_s: 0.3, cut_avoid_s: 0.4, silence_tolerance_ms: 50, require_speech_in_first_s: 3.0 }

@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "meta": {
+    "id": "karaoke_green",
+    "name": "Karaoke Green",
+    "version": 1,
+    "author": "starter",
+    "license": "Template: MIT. Fonts: SIL OFL 1.1 (verify files at install)",
+    "tags": [
+      "karaoke",
+      "story"
+    ]
+  },
+  "aspects": [
+    "9:16",
+    "1:1",
+    "4:5"
+  ],
+  "fonts": {
+    "latn": {
+      "family": "Poppins",
+      "weight": 700,
+      "fallback": [
+        "Noto Sans"
+      ]
+    },
+    "deva": {
+      "family": "Mukta",
+      "weight": 700,
+      "fallback": [
+        "Noto Sans Devanagari"
+      ]
+    },
+    "beng": {
+      "family": "Hind Siliguri",
+      "weight": 700,
+      "fallback": [
+        "Noto Sans Bengali"
+      ]
+    }
+  },
+  "text": {
+    "size_px": 70,
+    "case": "none",
+    "letter_spacing_px": 0,
+    "line_height": 1.15
+  },
+  "colors": {
+    "primary": "#FFFFFF",
+    "active": "#39FF6A",
+    "outline": "#000000",
+    "shadow": "#00000099",
+    "box": null
+  },
+  "stroke": {
+    "outline_px": 5,
+    "shadow_px": 2,
+    "shadow_offset": [
+      2,
+      2
+    ]
+  },
+  "box": {
+    "enabled": false,
+    "padding_px": 16,
+    "radius_px": 12,
+    "opacity": 0.85
+  },
+  "layout": {
+    "anchor": "bottom_center",
+    "y_percent": 66,
+    "align": "center",
+    "max_words_per_line": 4,
+    "max_lines": 2,
+    "max_chars": {
+      "latn": 26,
+      "deva": 20,
+      "beng": 20
+    },
+    "safe_area_profile": "shorts_default"
+  },
+  "animation": {
+    "mode": "karaoke",
+    "active_word": "highlight",
+    "in": "none",
+    "out": "none",
+    "duration_ms": 0,
+    "easing": "ease_out"
+  },
+  "emphasis": {
+    "keywords_bold": false,
+    "keyword_color": null,
+    "numbers_color": null
+  },
+  "emoji": {
+    "enabled": false
+  },
+  "speaker_colors": {
+    "enabled": false,
+    "palette": []
+  }
+}

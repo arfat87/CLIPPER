@@ -7,7 +7,9 @@ __pycache__/
 .ruff_cache/
 .env
 data/
-secrets/cookies/*.txt
+secrets/
+drive_mirror/
+docs/drive/
 .agent/inbox/*
 .agent/logs/*
 frontend/node_modules/
@@ -15,3 +17,5 @@ frontend/dist/
 *.egg-info/
 dist/
 build/
+# NOTE: do NOT ignore .agents/
+

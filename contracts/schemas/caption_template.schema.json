@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clipper.local/schemas/caption_template.schema.json",
+  "title": "CaptionTemplate",
+  "type": "object",
+  "required": ["schema_version", "meta", "aspects", "fonts", "text", "colors", "stroke", "layout", "animation"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "meta": {
+      "type": "object",
+      "required": ["id", "name", "version", "license"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,47}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "version": { "type": "integer", "minimum": 1 },
+        "author": { "type": "string" },
+        "license": { "type": "string", "minLength": 1 },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "aspects": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": { "enum": ["9:16", "1:1", "4:5"] }
+    },
+    "fonts": {
+      "type": "object",
+      "required": ["latn", "deva", "beng"],
+      "properties": {
+        "latn": { "$ref": "#/$defs/font" },
+        "deva": { "$ref": "#/$defs/font" },
+        "beng": { "$ref": "#/$defs/font" }
+      },
+      "additionalProperties": false
+    },
+    "text": {
+      "type": "object",
+      "required": ["size_px", "case"],
+      "properties": {
+        "size_px": { "type": "integer", "minimum": 24, "maximum": 200 },
+        "case": { "enum": ["none", "upper", "lower", "title"] },
+        "letter_spacing_px": { "type": "number", "minimum": -5, "maximum": 20 },
+        "line_height": { "type": "number", "minimum": 0.9, "maximum": 2.0 }
+      }
+    },
+    "colors": {
+      "type": "object",
+      "required": ["primary", "active", "outline"],
+      "properties": {
+        "primary": { "$ref": "#/$defs/color" },
+        "active": { "$ref": "#/$defs/color" },
+        "outline": { "$ref": "#/$defs/color" },
+        "shadow": { "$ref": "#/$defs/color" },
+        "box": { "oneOf": [{ "$ref": "#/$defs/color" }, { "type": "null" }] }
+      }
+    },
+    "stroke": {
+      "type": "object",
+      "required": ["outline_px", "shadow_px"],
+      "properties": {
+        "outline_px": { "type": "number", "minimum": 0, "maximum": 20 },
+        "shadow_px": { "type": "number", "minimum": 0, "maximum": 20 },
+        "shadow_offset": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "glow": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "color": { "$ref": "#/$defs/color" },
+            "radius_px": { "type": "number", "minimum": 0, "maximum": 30 }
+          }
+        }
+      }
+    },
+    "box": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "padding_px": { "type": "number", "minimum": 0 },
+        "radius_px": { "type": "number", "minimum": 0 },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "required": ["anchor", "y_percent", "align", "max_words_per_line", "max_lines"],
+      "properties": {
+        "anchor": { "enum": ["bottom_center", "center", "top_center", "lower_third"] },
+        "y_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "align": { "enum": ["left", "center", "right"] },
+        "max_words_per_line": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "max_lines": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "max_chars": {
+          "type": "object",
+          "properties": {
+            "latn": { "type": "integer", "minimum": 6 },
+            "deva": { "type": "integer", "minimum": 6 },
+            "beng": { "type": "integer", "minimum": 6 }
+          }
+        },
+        "safe_area_profile": { "type": "string" }
+      }
+    },
+    "animation": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["pages", "word_by_word", "karaoke"] },
+        "active_word": { "enum": ["none", "highlight", "scale", "underline"] },
+        "in": { "enum": ["none", "pop", "fade", "slide_up", "typewriter", "bounce"] },
+        "out": { "enum": ["none", "fade", "slide_down"] },
+        "duration_ms": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "easing": { "enum": ["linear", "ease_in", "ease_out", "ease_in_out"] }
+      }
+    },
+    "emphasis": {
+      "type": "object",
+      "properties": {
+        "keywords_bold": { "type": "boolean" },
+        "keyword_color": { "oneOf": [{ "$ref": "#/$defs/color" }, { "type": "null" }] },
+        "numbers_color": { "oneOf": [{ "$ref": "#/$defs/color" }, { "type": "null" }] }
+      }
+    },
+    "emoji": { "type": "object", "properties": { "enabled": { "type": "boolean" } } },
+    "speaker_colors": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "palette": { "type": "array", "items": { "$ref": "#/$defs/color" } }
+      }
+    }
+  },
+  "$defs": {
+    "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$" },
+    "font": {
+      "type": "object",
+      "required": ["family", "weight"],
+      "properties": {
+        "family": { "type": "string", "minLength": 1 },
+        "weight": { "type": "integer", "minimum": 100, "maximum": 900 },
+        "italic": { "type": "boolean" },
+        "fallback": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

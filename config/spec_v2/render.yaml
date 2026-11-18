@@ -1,0 +1,12 @@
+version: 1
+loudness: { integrated_lufs: -14, true_peak_db: -1.5, lra: 11, tolerance_lu: 1.0 }
+encoder: { prefer: auto, cpu: libx264, gpu: h264_nvenc }
+max_parallel: { cpu: 2, nvenc: 1 }
+profiles:
+  youtube_shorts: { w: 1080, h: 1920, fps: 30, crf: 20, preset: medium, audio_kbps: 160, max_duration_s: 180 }
+  reels:          { w: 1080, h: 1920, fps: 30, crf: 20, preset: medium, audio_kbps: 160, max_duration_s: 180 }
+  tiktok:         { w: 1080, h: 1920, fps: 30, crf: 20, preset: medium, audio_kbps: 160, max_duration_s: 180 }
+  square_1x1:     { w: 1080, h: 1080, fps: 30, crf: 20, preset: medium, audio_kbps: 160, max_duration_s: 180 }
+  portrait_4x5:   { w: 1080, h: 1350, fps: 30, crf: 20, preset: medium, audio_kbps: 160, max_duration_s: 180 }
+  draft_fast:     { w: 540,  h: 960,  fps: 30, crf: 28, preset: ultrafast, audio_kbps: 96, max_duration_s: 180 }
+thumbnail: { at: hook, format: jpg, quality: 90 }

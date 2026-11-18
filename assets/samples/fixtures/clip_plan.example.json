@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "clip_id": "01JFIXTURE0000000000000001",
+  "source": {
+    "media": "media/mezzanine.mp4"
+  },
+  "segments": [
+    {
+      "start": 0.4,
+      "end": 4.2
+    }
+  ],
+  "ops": [
+    {
+      "op": "remove_fillers",
+      "enabled": true
+    },
+    {
+      "op": "trim_silence",
+      "enabled": false,
+      "max_gap_s": 0.5
+    }
+  ],
+  "layout": {
+    "template": "fill_default@latest",
+    "force": null
+  },
+  "reframe": {
+    "path": "reframe_path.json"
+  },
+  "captions": {
+    "template": "bold_pop_yellow@1",
+    "script": "latn",
+    "overrides": {}
+  },
+  "overlays": [
+    {
+      "template": "hook_title@1",
+      "text": "{{hook_line}}",
+      "t": [
+        0,
+        2.5
+      ]
+    },
+    {
+      "template": "progress_bar@1"
+    }
+  ],
+  "brand_kit": null,
+  "audio": {
+    "loudness_lufs": -14,
+    "fade_in_ms": 30,
+    "fade_out_ms": 80
+  },
+  "output": {
+    "aspect": "9:16",
+    "profile": "youtube_shorts"
+  }
+}

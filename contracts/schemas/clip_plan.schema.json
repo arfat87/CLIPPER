@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clipper.local/schemas/clip_plan.schema.json",
+  "title": "ClipPlan",
+  "description": "Declarative edit description for one clip. Renderer is a pure function of this plus source media and template versions.",
+  "type": "object",
+  "required": ["schema_version", "clip_id", "source", "segments", "layout", "captions", "output"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "clip_id": { "type": "string" },
+    "source": {
+      "type": "object",
+      "required": ["media"],
+      "properties": { "media": { "type": "string" } }
+    },
+    "segments": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "ops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": { "enum": ["remove_fillers", "trim_silence"] },
+          "enabled": { "type": "boolean" },
+          "max_gap_s": { "type": "number", "minimum": 0.1 }
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "required": ["template"],
+      "properties": {
+        "template": { "type": "string", "pattern": "^[a-z][a-z0-9_]*@(latest|[0-9]+)$" },
+        "force": { "enum": ["fill", "fit_blur", "split_2", "screen_focus", null] }
+      }
+    },
+    "reframe": { "type": "object", "properties": { "path": { "type": "string" } } },
+    "captions": {
+      "type": "object",
+      "required": ["template", "script"],
+      "properties": {
+        "template": { "type": "string", "pattern": "^[a-z][a-z0-9_]*@(latest|[0-9]+)$" },
+        "script": { "enum": ["latn", "deva", "beng"] },
+        "overrides": { "type": "object" }
+      }
+    },
+    "overlays": {
+      "type": "array", "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["template"],
+        "properties": {
+          "template": { "type": "string" },
+          "text": { "type": "string" },
+          "t": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+        }
+      }
+    },
+    "brand_kit": { "type": ["string", "null"] },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "loudness_lufs": { "type": "number", "minimum": -24, "maximum": -9 },
+        "fade_in_ms": { "type": "integer", "minimum": 0 },
+        "fade_out_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["aspect", "profile"],
+      "properties": {
+        "aspect": { "enum": ["9:16", "1:1", "4:5"] },
+        "profile": { "type": "string" }
+      }
+    }
+  }
+}
