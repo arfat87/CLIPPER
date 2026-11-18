@@ -10,6 +10,9 @@ beforeAll(() => {
 afterEach(() => {
   server.resetHandlers();
   resetMockStore();
+  if (typeof window !== "undefined") {
+    window.history.replaceState(null, "", "/");
+  }
 });
 
 afterAll(() => {

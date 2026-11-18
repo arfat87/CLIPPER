@@ -1,7 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AdminShell } from "./components/AdminShell";
 import { StudioShell } from "./components/StudioShell";
+import { ToastProvider } from "./components/ui";
+import { useSyncRoute } from "./router";
+import { useStudioStore } from "./store/studioStore";
 
-const queryClient = new QueryClient({
+const defaultQueryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 10_000,
@@ -10,10 +14,18 @@ const queryClient = new QueryClient({
   },
 });
 
-export function App() {
+function AppRouterView() {
+  useSyncRoute();
+  const area = useStudioStore((s) => s.area);
+  return area === "admin" ? <AdminShell /> : <StudioShell />;
+}
+
+export function App({ client = defaultQueryClient }: { client?: QueryClient }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <StudioShell />
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <AppRouterView />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

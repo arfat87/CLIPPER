@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Clapperboard,
@@ -10,10 +10,24 @@ import {
   ListChecks,
   Palette,
   Settings,
+  ShieldCheck,
   Sparkles,
+  Trash2,
   Upload,
 } from "lucide-react";
-import { apiClient, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import {
+  useClipQuery,
+  useCreateJobMutation,
+  useDeleteJobMutation,
+  useDriveStatusQuery,
+  useHealthQuery,
+  useJobQuery,
+  useJobsQuery,
+  usePatchClipMutation,
+  usePresetsQuery,
+  useTemplatesQuery,
+} from "../api/hooks";
 import type {
   AspectRatio,
   ClipDetail,
@@ -22,14 +36,28 @@ import type {
   JobDetail,
   LanguageCode,
   ScriptPref,
+  TemplateKind,
 } from "../api/types";
 import { en } from "../i18n/en";
+import { navigateToAdmin, navigateToTab } from "../router";
 import {
   type NavTab,
   type UiStateSimulation,
   useStudioStore,
 } from "../store/studioStore";
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from "./StateViews";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  ConfirmModal,
+  StatusBadge,
+  useToast,
+} from "./ui";
 
 const NAV_ITEMS: Array<{ id: NavTab; label: string; icon: typeof Home }> = [
   { id: "home", label: en.nav.home, icon: Home },
@@ -47,30 +75,9 @@ const SIM_MODES: UiStateSimulation[] = [
   "offline",
 ];
 
-function StatusBadge({ status }: { status: string }) {
-  const normalized = status.toUpperCase();
-  const tone =
-    normalized === "COMPLETED" ||
-    normalized === "RENDERED" ||
-    normalized === "DONE" ||
-    normalized === "CONNECTED" ||
-    normalized === "PUBLISHED"
-      ? "border-ok/40 bg-ok/15 text-ok"
-      : normalized === "FAILED" || normalized === "AUTH_ERROR"
-        ? "border-err/40 bg-err/15 text-err"
-        : "border-warn/40 bg-warn/15 text-warn";
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tone}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 export function StudioShell() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const {
     activeTab,
     selectedJobId,
@@ -78,7 +85,6 @@ export function StudioShell() {
     selectedPresetId,
     selectedTemplateId,
     simulation,
-    setActiveTab,
     setSelectedJobId,
     setSelectedClipId,
     setSelectedPresetId,
@@ -99,6 +105,8 @@ export function StudioShell() {
   const [clipBrief, setClipBrief] = useState("");
   const [rightsConfirmed, setRightsConfirmed] = useState(true);
   const [formNotice, setFormNotice] = useState<string | null>(null);
+  const [templateKindFilter, setTemplateKindFilter] = useState<TemplateKind | "all">("all");
+  const [jobPendingDelete, setJobPendingDelete] = useState<JobDetail | null>(null);
 
   useEffect(() => {
     const onOffline = () => setBrowserOffline(true);
@@ -111,69 +119,43 @@ export function StudioShell() {
     };
   }, []);
 
-  const healthQuery = useQuery({
-    queryKey: ["health", simulation],
-    queryFn: () => apiClient.getHealth(),
-    retry: false,
-  });
-
-  const jobsQuery = useQuery({
-    queryKey: ["jobs", simulation],
-    queryFn: () => apiClient.listJobs(20),
-    retry: false,
-  });
-
-  const templatesQuery = useQuery({
-    queryKey: ["templates", simulation],
-    queryFn: () => apiClient.listTemplates(),
-    retry: false,
-  });
-
-  const presetsQuery = useQuery({
-    queryKey: ["presets", simulation],
-    queryFn: () => apiClient.listPresets(),
-    retry: false,
-  });
-
-  const driveQuery = useQuery({
-    queryKey: ["drive-status", simulation],
-    queryFn: () => apiClient.getDriveStatus(),
-    retry: false,
-  });
+  const healthQuery = useHealthQuery();
+  const jobsQuery = useJobsQuery({ limit: 20 });
+  const templatesQuery = useTemplatesQuery(
+    templateKindFilter === "all" ? undefined : { kind: templateKindFilter }
+  );
+  const presetsQuery = usePresetsQuery();
+  const driveQuery = useDriveStatusQuery();
 
   const jobs = jobsQuery.data?.items ?? [];
-  const activeJob: JobDetail | undefined =
+  const fallbackJob: JobDetail | undefined =
     jobs.find((j) => j.id === selectedJobId) ?? jobs[0];
+
+  const jobDetailQuery = useJobQuery(fallbackJob?.id, {
+    enabled: Boolean(fallbackJob?.id) && simulation !== "error",
+  });
+  const activeJob: JobDetail | undefined = jobDetailQuery.data ?? fallbackJob;
 
   const activeClipSummary: ClipSummary | undefined =
     activeJob?.clips?.find((c) => c.id === selectedClipId) ?? activeJob?.clips?.[0];
   const resolvedClipId = activeClipSummary?.id ?? null;
 
-  const clipDetailQuery = useQuery({
-    queryKey: ["clip", resolvedClipId, simulation],
-    queryFn: () => apiClient.getClip(resolvedClipId!),
-    enabled: Boolean(resolvedClipId) && simulation !== "loading" && simulation !== "empty",
-    retry: false,
-  });
+  const clipDetailQuery = useClipQuery(resolvedClipId);
 
-  const createJobMutation = useMutation({
-    mutationFn: (payload: CreateJobRequest) => apiClient.createJob(payload),
-    onSuccess: (created) => {
-      setFormNotice(null);
-      setSelectedJobId(created.id);
-      setSelectedClipId(created.clips?.[0]?.id ?? null);
-      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    },
-    onError: (err) => {
-      setFormNotice(err instanceof Error ? err.message : en.states.errorBody);
-    },
-  });
+  const createJobMutation = useCreateJobMutation();
+  const patchClipMutation = usePatchClipMutation();
+  const deleteJobMutation = useDeleteJobMutation();
 
   const handleCreateJob = (e: React.FormEvent) => {
     e.preventDefault();
     setFormNotice(null);
     if (sourceKind === "url" && !urlInput.trim()) {
-      setFormNotice("Paste a YouTube, Instagram, or Facebook URL to continue.");
+      setFormNotice(en.home.urlValidationError);
+      return;
+    }
+
+    if (!rightsConfirmed) {
+      setFormNotice(en.home.rightsValidationError);
       return;
     }
 
@@ -194,12 +176,81 @@ export function StudioShell() {
       rights_confirmed: true,
     };
 
-    if (!rightsConfirmed) {
-      setFormNotice("Confirm content rights before starting a clipping job.");
+    createJobMutation.mutate(payload, {
+      onSuccess: (created) => {
+        setFormNotice(null);
+        setSelectedJobId(created.id);
+        setSelectedClipId(created.clips?.[0]?.id ?? null);
+        toast({
+          title: en.home.jobCreatedToast,
+          description: en.home.jobCreatedToastDesc,
+          tone: "ok",
+        });
+      },
+      onError: (err) => {
+        setFormNotice(err instanceof Error ? err.message : en.states.errorBody);
+      },
+    });
+  };
+
+  const handleSelectCaptionTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!resolvedClipId) {
       return;
     }
+    patchClipMutation.mutate(
+      {
+        id: resolvedClipId,
+        patch: {
+          clip_plan: {
+            template_id: templateId,
+          },
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: en.home.clipUpdatedToast,
+            description: templateId,
+            tone: "ok",
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: en.states.errorTitle,
+            description: err.message,
+            tone: "err",
+          });
+        },
+      }
+    );
+  };
 
-    createJobMutation.mutate(payload);
+  const handleConfirmDeleteJob = () => {
+    if (!jobPendingDelete) {
+      return;
+    }
+    const deletingId = jobPendingDelete.id;
+    deleteJobMutation.mutate(deletingId, {
+      onSuccess: () => {
+        if (selectedJobId === deletingId) {
+          setSelectedJobId(null);
+        }
+        setJobPendingDelete(null);
+        toast({
+          title: en.jobs.deletedToast,
+          tone: "ok",
+        });
+      },
+      onError: (err) => {
+        setJobPendingDelete(null);
+        toast({
+          title: en.states.errorTitle,
+          description: err.message,
+          tone: "err",
+        });
+      },
+    });
   };
 
   const refetchAll = () => {
@@ -217,8 +268,13 @@ export function StudioShell() {
     ? (activeClip.clip_plan.caption_preview_lines as string[])
     : [activeClipSummary?.hook_line ?? "90% startups yahi galti karte hain!"];
 
+  const activeTemplateId =
+    typeof activeClip?.clip_plan?.template_id === "string"
+      ? activeClip.clip_plan.template_id
+      : selectedTemplateId;
+
   const selectedTemplate =
-    templates.find((t) => t.id === selectedTemplateId) ?? templates[0];
+    templates.find((t) => t.id === activeTemplateId) ?? templates[0];
 
   return (
     <div className="min-h-screen bg-bg text-text flex flex-col md:flex-row">
@@ -236,14 +292,18 @@ export function StudioShell() {
           </div>
         </div>
 
-        <nav aria-label="Primary navigation" className="flex-1 space-y-1 p-3">
+        <nav
+          aria-label={en.nav.primaryNavLabel}
+          className="flex-1 space-y-1 p-3"
+        >
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id;
             return (
               <button
                 key={id}
                 type="button"
-                onClick={() => setActiveTab(id)}
+                aria-current={active ? "page" : undefined}
+                onClick={() => navigateToTab(id)}
                 className={`flex min-h-[44px] w-full items-center gap-3 rounded-sm px-3 py-2 text-sm font-medium transition ${
                   active
                     ? "bg-accent text-accent-fg font-semibold"
@@ -255,13 +315,23 @@ export function StudioShell() {
               </button>
             );
           })}
+
+          <div className="pt-3 mt-3 border-t border-border">
+            <button
+              type="button"
+              onClick={() => navigateToAdmin("templates")}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-sm px-3 py-2 text-sm font-medium text-text-dim transition hover:bg-surface-2 hover:text-text"
+            >
+              <ShieldCheck className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span>{en.nav.admin}</span>
+            </button>
+          </div>
         </nav>
 
         <div className="border-t border-border p-3 text-xs text-text-dim space-y-1">
           <p className="font-semibold text-text">Toolchain</p>
           <p>
-            FFmpeg{" "}
-            {healthQuery.data?.ffmpeg?.version ?? "..."} ·{" "}
+            FFmpeg {healthQuery.data?.ffmpeg?.version ?? "..."} ·{" "}
             {healthQuery.data?.ffmpeg?.libass ? "libass OK" : "checking"}
           </p>
           <p>Drive: {driveQuery.data?.status ?? "..."}</p>
@@ -286,18 +356,13 @@ export function StudioShell() {
             </div>
 
             <div className="hidden md:block">
-              <h1 className="text-base font-semibold text-text">
-                {en.tagline}
-              </h1>
+              <h1 className="text-base font-semibold text-text">{en.tagline}</h1>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                  healthQuery.data?.ffmpeg?.libass
-                    ? "border-ok/40 bg-ok/10 text-ok"
-                    : "border-border bg-surface text-text-dim"
-                }`}
+              <Badge
+                tone={healthQuery.data?.ffmpeg?.libass ? "ok" : "neutral"}
+                className="py-1"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>
@@ -305,7 +370,7 @@ export function StudioShell() {
                     ? en.header.ffmpegReady
                     : en.header.ffmpegDegraded}
                 </span>
-              </span>
+              </Badge>
 
               <label className="flex items-center gap-1.5 text-xs text-text-dim">
                 <span className="sr-only">{en.header.mockStateLabel}</span>
@@ -315,7 +380,7 @@ export function StudioShell() {
                   onChange={(e) =>
                     setSimulation(e.target.value as UiStateSimulation)
                   }
-                  className="min-h-[36px] rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs text-text"
+                  className="min-h-[44px] rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs text-text"
                 >
                   {SIM_MODES.map((mode) => (
                     <option key={mode} value={mode}>
@@ -346,10 +411,7 @@ export function StudioShell() {
               {activeTab === "home" ? (
                 <div className="space-y-6">
                   {/* New Job Form Card */}
-                  <section
-                    aria-labelledby="new-job-heading"
-                    className="rounded-lg border border-border bg-surface p-4 sm:p-5"
-                  >
+                  <Card aria-labelledby="new-job-heading" className="p-4 sm:p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h2
@@ -369,9 +431,21 @@ export function StudioShell() {
                       >
                         {(
                           [
-                            { id: "url", label: en.home.sourceKinds.url, icon: Link2 },
-                            { id: "upload", label: en.home.sourceKinds.upload, icon: Upload },
-                            { id: "drive", label: en.home.sourceKinds.drive, icon: FolderSync },
+                            {
+                              id: "url",
+                              label: en.home.sourceKinds.url,
+                              icon: Link2,
+                            },
+                            {
+                              id: "upload",
+                              label: en.home.sourceKinds.upload,
+                              icon: Upload,
+                            },
+                            {
+                              id: "drive",
+                              label: en.home.sourceKinds.drive,
+                              icon: FolderSync,
+                            },
                           ] as const
                         ).map(({ id, label, icon: Icon }) => (
                           <button
@@ -380,7 +454,7 @@ export function StudioShell() {
                             role="tab"
                             aria-selected={sourceKind === id}
                             onClick={() => setSourceKind(id)}
-                            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition ${
+                            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition ${
                               sourceKind === id
                                 ? "bg-accent text-accent-fg"
                                 : "text-text-dim hover:text-text"
@@ -418,10 +492,14 @@ export function StudioShell() {
 
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">{en.home.languageLabel}</span>
+                          <span className="text-text-dim">
+                            {en.home.languageLabel}
+                          </span>
                           <select
                             value={language}
-                            onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+                            onChange={(e) =>
+                              setLanguage(e.target.value as LanguageCode)
+                            }
                             className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
                           >
                             <option value="auto">Auto</option>
@@ -433,10 +511,14 @@ export function StudioShell() {
                         </label>
 
                         <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">{en.home.scriptLabel}</span>
+                          <span className="text-text-dim">
+                            {en.home.scriptLabel}
+                          </span>
                           <select
                             value={scriptPref}
-                            onChange={(e) => setScriptPref(e.target.value as ScriptPref)}
+                            onChange={(e) =>
+                              setScriptPref(e.target.value as ScriptPref)
+                            }
                             className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
                           >
                             <option value="auto">Auto</option>
@@ -446,10 +528,14 @@ export function StudioShell() {
                         </label>
 
                         <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">{en.home.aspectLabel}</span>
+                          <span className="text-text-dim">
+                            {en.home.aspectLabel}
+                          </span>
                           <select
                             value={aspect}
-                            onChange={(e) => setAspect(e.target.value as AspectRatio)}
+                            onChange={(e) =>
+                              setAspect(e.target.value as AspectRatio)
+                            }
                             className="min-h-[44px] w-full rounded-sm border border-border bg-surface-2 px-2.5 text-sm text-text"
                           >
                             <option value="9:16">9:16 Vertical</option>
@@ -459,7 +545,9 @@ export function StudioShell() {
                         </label>
 
                         <label className="block space-y-1 text-xs">
-                          <span className="text-text-dim">{en.home.presetLabel}</span>
+                          <span className="text-text-dim">
+                            {en.home.presetLabel}
+                          </span>
                           <select
                             value={selectedPresetId}
                             onChange={(e) => setSelectedPresetId(e.target.value)}
@@ -505,21 +593,20 @@ export function StudioShell() {
                           <span>{en.home.rightsLabel}</span>
                         </label>
 
-                        <button
+                        <Button
                           type="submit"
-                          disabled={createJobMutation.isPending}
-                          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-sm bg-accent px-5 py-2.5 text-sm font-bold text-accent-fg transition hover:opacity-90 disabled:opacity-50"
+                          loading={createJobMutation.isPending}
+                          leftIcon={
+                            <Sparkles className="h-4 w-4" aria-hidden="true" />
+                          }
                         >
-                          <Sparkles className="h-4 w-4" aria-hidden="true" />
-                          <span>
-                            {createJobMutation.isPending
-                              ? en.home.startingButton
-                              : en.home.startButton}
-                          </span>
-                        </button>
+                          {createJobMutation.isPending
+                            ? en.home.startingButton
+                            : en.home.startButton}
+                        </Button>
                       </div>
                     </form>
-                  </section>
+                  </Card>
 
                   {/* Clips + 9:16 Preview Split */}
                   {jobs.length === 0 ? (
@@ -542,7 +629,8 @@ export function StudioShell() {
                         <div className="flex items-center justify-between gap-2">
                           <div>
                             <h2 id="clips-heading" className="text-base font-bold">
-                              {en.home.clipsTitle} · {activeJob?.title ?? "Untitled"}
+                              {en.home.clipsTitle} ·{" "}
+                              {activeJob?.title ?? "Untitled"}
                             </h2>
                             <p className="text-xs text-text-dim">
                               {activeJob?.platform?.toUpperCase() ?? "SOURCE"} ·{" "}
@@ -550,7 +638,9 @@ export function StudioShell() {
                               {activeJob?.clips?.length ?? 0} clips
                             </p>
                           </div>
-                          {activeJob ? <StatusBadge status={activeJob.status} /> : null}
+                          {activeJob ? (
+                            <StatusBadge status={activeJob.status} />
+                          ) : null}
                         </div>
 
                         <div className="space-y-3">
@@ -570,9 +660,9 @@ export function StudioShell() {
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
-                                    <span className="rounded-sm bg-accent/15 px-2 py-0.5 text-xs font-bold text-accent">
+                                    <Badge tone="accent" size="sm">
                                       #{clip.rank} · {scorePct}/100
-                                    </span>
+                                    </Badge>
                                     <span className="text-xs text-text-dim">
                                       {clip.start_s}s – {clip.end_s}s
                                     </span>
@@ -597,9 +687,9 @@ export function StudioShell() {
                       </section>
 
                       {/* 9:16 Live Preview */}
-                      <section
+                      <Card
                         aria-labelledby="preview-heading"
-                        className="rounded-lg border border-border bg-surface p-4 space-y-4 lg:col-span-5"
+                        className="space-y-4 lg:col-span-5"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <h2
@@ -616,7 +706,11 @@ export function StudioShell() {
                         </div>
 
                         {clipDetailQuery.isLoading ? (
-                          <LoadingState title="Loading clip preview..." body="" />
+                          <LoadingState
+                            title="Loading clip preview..."
+                            body=""
+                            showSkeletons={false}
+                          />
                         ) : clipDetailQuery.isError ? (
                           <ErrorState
                             message={
@@ -631,14 +725,19 @@ export function StudioShell() {
                             <div className="mx-auto flex aspect-[9/16] max-h-[340px] w-full max-w-[200px] flex-col justify-between overflow-hidden rounded-md border border-border bg-bg p-3">
                               <div className="flex items-center justify-between text-[10px] text-text-dim">
                                 <span>9:16 SAFE AREA</span>
-                                <Clapperboard className="h-3.5 w-3.5" aria-hidden="true" />
+                                <Clapperboard
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                />
                               </div>
                               <div className="my-auto text-center">
                                 {previewLines.map((line, idx) => (
                                   <p
                                     key={line}
                                     className={`text-sm font-extrabold leading-snug ${
-                                      idx === 1 ? "text-accent scale-105" : "text-text"
+                                      idx === 1
+                                        ? "text-accent scale-105"
+                                        : "text-text"
                                     }`}
                                   >
                                     {line}
@@ -659,7 +758,8 @@ export function StudioShell() {
                                 <div className="space-y-1.5">
                                   {Object.entries(activeClip.score_breakdown).map(
                                     ([metric, val]) => {
-                                      const num = typeof val === "number" ? val : 0;
+                                      const num =
+                                        typeof val === "number" ? val : 0;
                                       const pct = Math.round(num * 100);
                                       return (
                                         <div
@@ -691,20 +791,25 @@ export function StudioShell() {
                               {templates
                                 .filter((t) => t.kind === "caption")
                                 .slice(0, 4)
-                                .map((tpl) => (
-                                  <button
-                                    key={tpl.id}
-                                    type="button"
-                                    onClick={() => setSelectedTemplateId(tpl.id)}
-                                    className={`min-h-[44px] rounded-sm border px-2.5 py-2 text-left text-xs font-medium transition ${
-                                      selectedTemplateId === tpl.id
-                                        ? "border-accent bg-accent/10 text-accent"
-                                        : "border-border bg-surface-2 text-text hover:border-text-dim"
-                                    }`}
-                                  >
-                                    {tpl.name}
-                                  </button>
-                                ))}
+                                .map((tpl) => {
+                                  const isSelected = activeTemplateId === tpl.id;
+                                  return (
+                                    <button
+                                      key={tpl.id}
+                                      type="button"
+                                      onClick={() =>
+                                        handleSelectCaptionTemplate(tpl.id)
+                                      }
+                                      className={`min-h-[44px] rounded-sm border px-2.5 py-2 text-left text-xs font-medium transition ${
+                                        isSelected
+                                          ? "border-accent bg-accent/10 text-accent"
+                                          : "border-border bg-surface-2 text-text hover:border-text-dim"
+                                      }`}
+                                    >
+                                      {tpl.name}
+                                    </button>
+                                  );
+                                })}
                             </div>
 
                             <p className="text-[11px] text-text-dim">
@@ -712,7 +817,7 @@ export function StudioShell() {
                             </p>
                           </>
                         )}
-                      </section>
+                      </Card>
                     </div>
                   )}
                 </div>
@@ -736,28 +841,36 @@ export function StudioShell() {
                       actionLabel={en.jobs.emptyCta}
                       onAction={() => {
                         setSimulation("normal");
-                        setActiveTab("home");
+                        navigateToTab("home");
                       }}
                     />
                   ) : (
                     <div className="space-y-3">
                       {jobs.map((job) => (
-                        <div
-                          key={job.id}
-                          className="rounded-lg border border-border bg-surface p-4 space-y-3"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Card key={job.id} className="space-y-3">
+                          <CardHeader>
                             <div>
-                              <h3 className="text-sm font-bold text-text">
-                                {job.title ?? job.id}
-                              </h3>
-                              <p className="text-xs text-text-dim">
+                              <CardTitle>{job.title ?? job.id}</CardTitle>
+                              <CardDescription>
                                 {job.platform ?? job.source_kind} · {job.language} ·{" "}
                                 {job.clips?.length ?? 0} clips
-                              </p>
+                              </CardDescription>
                             </div>
-                            <StatusBadge status={job.status} />
-                          </div>
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={job.status} />
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                aria-label={`${en.jobs.deleteJob} ${job.title ?? job.id}`}
+                                onClick={() => setJobPendingDelete(job)}
+                                leftIcon={
+                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                }
+                              >
+                                {en.jobs.deleteJob}
+                              </Button>
+                            </div>
+                          </CardHeader>
 
                           <div className="flex flex-wrap gap-1.5">
                             {(job.stages ?? []).map((st) => (
@@ -775,7 +888,7 @@ export function StudioShell() {
                               </span>
                             ))}
                           </div>
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   )}
@@ -795,6 +908,7 @@ export function StudioShell() {
 
                   {driveQuery.isError ? (
                     <ErrorState
+                      title={en.library.errorTitle}
                       message={
                         driveQuery.error instanceof ApiError
                           ? driveQuery.error.message
@@ -803,45 +917,100 @@ export function StudioShell() {
                       onRetry={() => void driveQuery.refetch()}
                     />
                   ) : (
-                    <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold">{en.library.driveCardTitle}</h3>
+                    <Card className="space-y-3">
+                      <CardHeader>
+                        <CardTitle>{en.library.driveCardTitle}</CardTitle>
                         <StatusBadge status={driveQuery.data?.status ?? "DISABLED"} />
-                      </div>
-                      <p className="text-xs text-text-dim">
-                        {en.library.routesLabel}
-                      </p>
+                      </CardHeader>
+                      <CardDescription>{en.library.routesLabel}</CardDescription>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                        {Object.entries(driveQuery.data?.counts_by_route ?? {}).map(
-                          ([route, count]) => (
-                            <div
-                              key={route}
-                              className="rounded-sm border border-border bg-surface-2 p-3"
-                            >
-                              <p className="text-xs uppercase text-text-dim">{route}</p>
-                              <p className="text-lg font-bold text-text">{count}</p>
-                            </div>
-                          )
-                        )}
+                        {Object.entries(
+                          driveQuery.data?.counts_by_route ?? {}
+                        ).map(([route, count]) => (
+                          <div
+                            key={route}
+                            className="rounded-sm border border-border bg-surface-2 p-3"
+                          >
+                            <p className="text-xs uppercase text-text-dim">
+                              {route}
+                            </p>
+                            <p className="text-lg font-bold text-text">{count}</p>
+                          </div>
+                        ))}
                       </div>
-                    </div>
+                    </Card>
                   )}
+
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-text-dim">
+                      {en.library.recentJobsTitle} ({jobs.length})
+                    </h3>
+                    {jobs.length === 0 ? (
+                      <EmptyState
+                        title={en.library.emptyTitle}
+                        body={en.library.emptyBody}
+                        actionLabel={en.library.emptyCta}
+                        onAction={() => navigateToTab("home")}
+                      />
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {jobs.map((job) => (
+                          <Card key={job.id} variant="interactive">
+                            <CardHeader>
+                              <CardTitle>{job.title ?? job.id}</CardTitle>
+                              <Badge tone="route" size="sm">
+                                {job.source_kind}
+                              </Badge>
+                            </CardHeader>
+                            <CardContent className="text-xs text-text-dim">
+                              {job.language} · {job.clips?.length ?? 0} clips
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </section>
               ) : null}
 
               {activeTab === "templates" ? (
                 <section aria-labelledby="templates-heading" className="space-y-4">
-                  <div>
-                    <h2 id="templates-heading" className="text-lg font-bold">
-                      {en.templates.title}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-text-dim">
-                      {en.templates.subtitle}
-                    </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 id="templates-heading" className="text-lg font-bold">
+                        {en.templates.title}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-text-dim">
+                        {en.templates.subtitle}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {(
+                        [
+                          { id: "all", label: en.templates.filterAll },
+                          { id: "caption", label: en.templates.filterCaption },
+                          { id: "layout", label: en.templates.filterLayout },
+                          { id: "publish", label: en.templates.filterPublish },
+                        ] as const
+                      ).map(({ id, label }) => (
+                        <Button
+                          key={id}
+                          size="sm"
+                          variant={
+                            templateKindFilter === id ? "primary" : "secondary"
+                          }
+                          onClick={() => setTemplateKindFilter(id)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
                   {templatesQuery.isError ? (
                     <ErrorState
+                      title={en.templates.errorTitle}
                       message={
                         templatesQuery.error instanceof ApiError
                           ? templatesQuery.error.message
@@ -853,6 +1022,8 @@ export function StudioShell() {
                     <EmptyState
                       title={en.templates.emptyTitle}
                       body={en.templates.emptyBody}
+                      actionLabel={en.templates.emptyCta}
+                      onAction={() => navigateToAdmin("templates")}
                     />
                   ) : (
                     <div className="space-y-4">
@@ -861,21 +1032,16 @@ export function StudioShell() {
                       </h3>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {templates.map((tpl) => (
-                          <div
-                            key={tpl.id}
-                            className="rounded-lg border border-border bg-surface p-4 space-y-2"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-text">
-                                {tpl.name}
-                              </span>
+                          <Card key={tpl.id} className="space-y-2">
+                            <CardHeader>
+                              <CardTitle>{tpl.name}</CardTitle>
                               <StatusBadge status={tpl.status} />
-                            </div>
-                            <p className="text-xs text-text-dim">
+                            </CardHeader>
+                            <CardDescription>
                               Kind: {tpl.kind} · v{tpl.latest_version} · Source:{" "}
                               {tpl.source ?? "builtin"}
-                            </p>
-                          </div>
+                            </CardDescription>
+                          </Card>
                         ))}
                       </div>
 
@@ -883,17 +1049,43 @@ export function StudioShell() {
                         {en.templates.presetsHeading} ({presets.length})
                       </h3>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        {presets.map((preset) => (
-                          <div
-                            key={preset.id}
-                            className="rounded-lg border border-border bg-surface p-4 space-y-1"
-                          >
-                            <p className="text-sm font-bold text-text">{preset.name}</p>
-                            <p className="text-xs text-text-dim">
-                              Caption: {preset.caption} · Profile: {preset.render_profile}
-                            </p>
-                          </div>
-                        ))}
+                        {presets.map((preset) => {
+                          const isDefault = selectedPresetId === preset.id;
+                          return (
+                            <Card key={preset.id} selected={isDefault}>
+                              <CardHeader>
+                                <CardTitle>{preset.name}</CardTitle>
+                                {isDefault ? (
+                                  <Badge tone="accent" size="sm">
+                                    {en.templates.activePreset}
+                                  </Badge>
+                                ) : null}
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <p className="text-xs text-text-dim">
+                                  Caption: {preset.caption} · Profile:{" "}
+                                  {preset.render_profile}
+                                </p>
+                                {!isDefault ? (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => {
+                                      setSelectedPresetId(preset.id);
+                                      toast({
+                                        title: en.templates.presetUpdatedToast,
+                                        description: preset.name,
+                                        tone: "ok",
+                                      });
+                                    }}
+                                  >
+                                    {en.templates.usePreset}
+                                  </Button>
+                                ) : null}
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -912,8 +1104,8 @@ export function StudioShell() {
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="rounded-lg border border-border bg-surface p-4 space-y-2">
-                      <h3 className="text-sm font-bold">{en.settings.toolchainHeading}</h3>
+                    <Card className="space-y-2">
+                      <CardTitle>{en.settings.toolchainHeading}</CardTitle>
                       <dl className="space-y-1 text-xs">
                         <div className="flex justify-between">
                           <dt className="text-text-dim">FFmpeg</dt>
@@ -922,7 +1114,9 @@ export function StudioShell() {
                         <div className="flex justify-between">
                           <dt className="text-text-dim">libass / harfbuzz</dt>
                           <dd>
-                            {healthQuery.data?.ffmpeg?.libass ? "Enabled" : "Missing"}
+                            {healthQuery.data?.ffmpeg?.libass
+                              ? "Enabled"
+                              : "Missing"}
                           </dd>
                         </div>
                         <div className="flex justify-between">
@@ -931,28 +1125,51 @@ export function StudioShell() {
                         </div>
                         <div className="flex justify-between">
                           <dt className="text-text-dim">LLM Provider</dt>
-                          <dd>{healthQuery.data?.models?.llm?.provider ?? "—"}</dd>
+                          <dd>
+                            {healthQuery.data?.models?.llm?.provider ?? "—"}
+                          </dd>
                         </div>
                         <div className="flex justify-between">
                           <dt className="text-text-dim">Disk Free</dt>
                           <dd>{healthQuery.data?.disk?.free_gb ?? "—"} GB</dd>
                         </div>
                       </dl>
-                    </div>
+                    </Card>
 
-                    <div className="rounded-lg border border-border bg-surface p-4 space-y-2">
-                      <h3 className="text-sm font-bold">{en.settings.defaultsHeading}</h3>
+                    <Card className="space-y-2">
+                      <CardTitle>{en.settings.defaultsHeading}</CardTitle>
                       <p className="text-xs text-text-dim">
-                        Default preset: <span className="text-text">{selectedPresetId}</span>
+                        Default preset:{" "}
+                        <span className="text-text">{selectedPresetId}</span>
                       </p>
                       <p className="text-xs text-text-dim">
-                        Default template: <span className="text-text">{selectedTemplateId}</span>
+                        Default template:{" "}
+                        <span className="text-text">{selectedTemplateId}</span>
                       </p>
                       <p className="text-xs text-text-dim">
                         Templates valid: {healthQuery.data?.templates?.valid ?? 0}
                       </p>
-                    </div>
+                    </Card>
                   </div>
+
+                  <Card variant="raised" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <CardTitle>{en.settings.adminLinkTitle}</CardTitle>
+                      <CardDescription className="mt-1">
+                        {en.settings.adminLinkBody}
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => navigateToAdmin("templates")}
+                      leftIcon={
+                        <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                      }
+                      className="shrink-0"
+                    >
+                      {en.settings.adminLinkCta}
+                    </Button>
+                  </Card>
                 </section>
               ) : null}
             </>
@@ -960,9 +1177,9 @@ export function StudioShell() {
         </main>
       </div>
 
-      {/* Mobile Bottom Tab Bar (360px one-handed navigation, 44px targets) */}
+      {/* Mobile Bottom Tab Bar (360px one-handed navigation, >= 44px targets) */}
       <nav
-        aria-label="Mobile navigation"
+        aria-label={en.nav.mobileNavLabel}
         className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-surface md:hidden"
       >
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
@@ -971,7 +1188,8 @@ export function StudioShell() {
             <button
               key={id}
               type="button"
-              onClick={() => setActiveTab(id)}
+              aria-current={active ? "page" : undefined}
+              onClick={() => navigateToTab(id)}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
                 active ? "text-accent" : "text-text-dim"
               }`}
@@ -982,6 +1200,17 @@ export function StudioShell() {
           );
         })}
       </nav>
+
+      <ConfirmModal
+        open={Boolean(jobPendingDelete)}
+        title={en.jobs.deleteConfirmTitle}
+        description={en.jobs.deleteConfirmBody}
+        confirmLabel={en.jobs.deleteConfirmCta}
+        variant="destructive"
+        loading={deleteJobMutation.isPending}
+        onConfirm={handleConfirmDeleteJob}
+        onCancel={() => setJobPendingDelete(null)}
+      />
     </div>
   );
 }

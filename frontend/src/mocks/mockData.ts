@@ -1,4 +1,5 @@
 import type {
+  Blocker,
   ClipDetail,
   DriveStatus,
   HealthResponse,
@@ -404,3 +405,65 @@ export const initialMockJobs: JobDetail[] = [
     updated_at: "2026-11-18T13:22:05Z",
   },
 ];
+
+export const mockAdminBlockers: Blocker[] = [
+  {
+    id: "BLK-0001",
+    type: "SECRET",
+    status: "OPEN",
+    task_id: "T-4.3",
+    step: "llm_highlight_scoring",
+    title: "Gemini API Key (optional cloud LLM fallback)",
+    payload: {
+      env_key: "GEMINI_API_KEY",
+      instructions: "Add GEMINI_API_KEY to .env or select local Ollama provider.",
+    },
+    created_at: "2026-11-18T10:15:00Z",
+    resolved_at: null,
+  },
+  {
+    id: "BLK-0002",
+    type: "ASSET",
+    status: "RESOLVED",
+    task_id: "T-6.2",
+    step: "font_check",
+    title: "Noto Sans Devanagari Bold font verified",
+    payload: {
+      script: "deva",
+      font: "NotoSansDevanagari-Bold.ttf",
+    },
+    created_at: "2026-11-17T09:00:00Z",
+    resolved_at: "2026-11-17T09:12:00Z",
+  },
+];
+
+export const mockAdminSettings: Record<string, unknown> = {
+  asr_engine: "faster-whisper",
+  asr_model: "large-v3",
+  device: "cuda",
+  llm_provider: "gemini",
+  llm_model: "gemini-2.5-flash",
+  secrets: {
+    GEMINI_API_KEY: { set: false },
+    S3_ACCESS_KEY: { set: false },
+    DRIVE_OAUTH_TOKEN: { set: true },
+  },
+};
+
+export const mockAdminAudit: Array<Record<string, unknown>> = [
+  {
+    id: "aud_01",
+    actor: "owner",
+    action: "template.publish",
+    target: "bold_pop_yellow@v2",
+    timestamp: "2026-11-18T11:40:00Z",
+  },
+  {
+    id: "aud_02",
+    actor: "owner",
+    action: "preset.update",
+    target: "default",
+    timestamp: "2026-11-18T09:20:00Z",
+  },
+];
+

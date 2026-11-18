@@ -1,22 +1,29 @@
 import { AlertTriangle, Inbox, Loader2, RefreshCw, WifiOff } from "lucide-react";
 import { en } from "../i18n/en";
+import { Button, Card, SkeletonCard } from "./ui";
 
 export function LoadingState({
   title = en.states.loadingTitle,
   body = en.states.loadingBody,
+  showSkeletons = true,
 }: {
   title?: string;
   body?: string;
+  showSkeletons?: boolean;
 }) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex flex-col items-center justify-center rounded-lg border border-border bg-surface p-8 text-center"
-    >
-      <Loader2 className="h-7 w-7 animate-spin text-accent" aria-hidden="true" />
-      <p className="mt-3 text-base font-semibold text-text">{title}</p>
-      <p className="mt-1 text-sm text-text-dim">{body}</p>
+    <div role="status" aria-live="polite" className="space-y-4">
+      <Card className="flex flex-col items-center justify-center p-8 text-center">
+        <Loader2 className="h-7 w-7 animate-spin text-accent" aria-hidden="true" />
+        <p className="mt-3 text-base font-semibold text-text">{title}</p>
+        {body ? <p className="mt-1 text-sm text-text-dim">{body}</p> : null}
+      </Card>
+      {showSkeletons ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -33,22 +40,21 @@ export function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface p-8 text-center">
+    <Card
+      variant="dashed"
+      className="flex flex-col items-center justify-center p-8 text-center"
+    >
       <div className="flex h-11 w-11 items-center justify-center rounded-md bg-surface-2 text-accent">
         <Inbox className="h-5 w-5" aria-hidden="true" />
       </div>
       <h3 className="mt-3 text-base font-semibold text-text">{title}</h3>
       <p className="mt-1 max-w-md text-sm text-text-dim">{body}</p>
       {actionLabel && onAction ? (
-        <button
-          type="button"
-          onClick={onAction}
-          className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-sm bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:opacity-90"
-        >
+        <Button onClick={onAction} className="mt-4">
           {actionLabel}
-        </button>
+        </Button>
       ) : null}
-    </div>
+    </Card>
   );
 }
 
@@ -67,21 +73,24 @@ export function ErrorState({
       className="flex flex-col items-start gap-3 rounded-lg border border-err/50 bg-err/10 p-5 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-err" aria-hidden="true" />
+        <AlertTriangle
+          className="mt-0.5 h-5 w-5 shrink-0 text-err"
+          aria-hidden="true"
+        />
         <div>
           <h3 className="text-sm font-semibold text-text">{title}</h3>
           <p className="mt-0.5 text-sm text-text-dim">{message}</p>
         </div>
       </div>
       {onRetry ? (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={onRetry}
-          className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-sm border border-border bg-surface-2 px-4 py-2 text-sm font-semibold text-text transition hover:border-accent"
+          leftIcon={<RefreshCw className="h-4 w-4" aria-hidden="true" />}
+          className="shrink-0"
         >
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          <span>{en.states.retry}</span>
-        </button>
+          {en.states.retry}
+        </Button>
       ) : null}
     </div>
   );

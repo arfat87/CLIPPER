@@ -1,5 +1,8 @@
-import { http, HttpResponse, delay } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import type {
+  AdminAuditResponse,
+  AdminBlockersResponse,
+  AdminTemplatesResponse,
   ClipDetail,
   CreateJobRequest,
   ErrorEnvelope,
@@ -10,6 +13,9 @@ import type {
 } from "../api/types";
 import {
   initialMockJobs,
+  mockAdminAudit,
+  mockAdminBlockers,
+  mockAdminSettings,
   mockClipsById,
   mockDriveStatus,
   mockHealth,
@@ -87,7 +93,7 @@ export const handlers = [
 
   http.post("/api/v1/jobs", async ({ request }) => {
     const body = (await request.json()) as CreateJobRequest;
-    await delay(150);
+    await delay(100);
 
     if (!body.rights_confirmed) {
       return makeError(
@@ -193,6 +199,16 @@ export const handlers = [
     return HttpResponse.json(job);
   }),
 
+  http.delete("/api/v1/jobs/:id", ({ params }) => {
+    const id = String(params.id);
+    const exists = jobsStore.some((j) => j.id === id);
+    if (!exists) {
+      return makeError("VALIDATION_ERROR", `Job '${id}' was not found.`, 404, false);
+    }
+    jobsStore = jobsStore.filter((j) => j.id !== id);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   http.get("/api/v1/clips/:id", ({ params, request }) => {
     if (getMockMode(request) === "error") {
       return makeError(
@@ -227,6 +243,16 @@ export const handlers = [
       },
     };
     clipsStore[id] = updated;
+    jobsStore = jobsStore.map((job) =>
+      job.id === updated.job_id
+        ? {
+            ...job,
+            clips: (job.clips ?? []).map((c) =>
+              c.id === updated.id ? { ...c, ...updated } : c
+            ),
+          }
+        : job
+    );
     return HttpResponse.json(updated);
   }),
 
@@ -243,7 +269,21 @@ export const handlers = [
       const empty: TemplateListResponse = { items: [] };
       return HttpResponse.json(empty);
     }
-    const payload: TemplateListResponse = { items: mockTemplates };
+
+    const url = new URL(request.url);
+    const kindFilter = url.searchParams.get("kind");
+    const statusFilter = url.searchParams.get("status");
+    const items = mockTemplates.filter((tpl) => {
+      if (kindFilter && tpl.kind !== kindFilter) {
+        return false;
+      }
+      if (statusFilter && tpl.status !== statusFilter) {
+        return false;
+      }
+      return true;
+    });
+
+    const payload: TemplateListResponse = { items };
     return HttpResponse.json(payload);
   }),
 
@@ -267,5 +307,52 @@ export const handlers = [
       );
     }
     return HttpResponse.json(mockDriveStatus);
+  }),
+
+  http.get("/api/v1/admin/templates", ({ request }) => {
+    const mode = getMockMode(request);
+    if (mode === "empty") {
+      const empty: AdminTemplatesResponse = { items: [] };
+      return HttpResponse.json(empty);
+    }
+    const payload: AdminTemplatesResponse = { items: mockTemplates };
+    return HttpResponse.json(payload);
+  }),
+
+  http.get("/api/v1/admin/blockers", ({ request }) => {
+    const mode = getMockMode(request);
+    if (mode === "empty") {
+      const empty: AdminBlockersResponse = { items: [] };
+      return HttpResponse.json(empty);
+    }
+    const payload: AdminBlockersResponse = { items: mockAdminBlockers };
+    return HttpResponse.json(payload);
+  }),
+
+  http.get("/api/v1/admin/jobs", ({ request }) => {
+    const mode = getMockMode(request);
+    if (mode === "empty") {
+      const empty: PaginatedJobs = { items: [], next_cursor: null };
+      return HttpResponse.json(empty);
+    }
+    const payload: PaginatedJobs = { items: jobsStore, next_cursor: null };
+    return HttpResponse.json(payload);
+  }),
+
+  http.get("/api/v1/admin/settings", () => {
+    return HttpResponse.json(mockAdminSettings);
+  }),
+
+  http.get("/api/v1/admin/audit", ({ request }) => {
+    const mode = getMockMode(request);
+    if (mode === "empty") {
+      const empty: AdminAuditResponse = { items: [], next_cursor: null };
+      return HttpResponse.json(empty);
+    }
+    const payload: AdminAuditResponse = {
+      items: mockAdminAudit,
+      next_cursor: null,
+    };
+    return HttpResponse.json(payload);
   }),
 ];
