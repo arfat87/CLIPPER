@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import re
 import shutil
 import socket
@@ -13,9 +14,16 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import yt_dlp
 
 from backend.app.config import get_settings
+from backend.pipeline.ingest.cookies import (
+    CookieStatus,
+    redact_cookie_secrets,
+    resolve_cookie_file,
+)
 from backend.pipeline.sample_generator import ensure_sample_media
-from hitl.models import BlockerType, NeededItem
+from hitl.models import Blocker, BlockerRequired, BlockerType, NeededItem, detect_leaked_secret
 from hitl.raise_blocker import create_or_get_blocker
+
+logger = logging.getLogger(__name__)
 
 _TRACKING_QUERY_PARAMS = {
     "fbclid",
@@ -49,10 +57,12 @@ class IngestError(RuntimeError):
         *,
         retryable: bool = False,
         platform: str | None = None,
+        blocker_id: str | None = None,
     ) -> None:
         self.code = code
         self.retryable = retryable
         self.platform = platform
+        self.blocker_id = blocker_id
         super().__init__(message or code)
 
 
@@ -141,8 +151,11 @@ def _extract_video_id(platform: str, raw: str, parsed: Any, query_pairs: list[tu
         return None
 
     if platform == "instagram":
-        if len(path_parts) >= 2 and path_parts[0] in {"reel", "reels", "p", "tv"}:
-            return path_parts[1]
+        for marker in ("reel", "reels", "p", "tv"):
+            if marker in path_parts:
+                idx = path_parts.index(marker)
+                if idx + 1 < len(path_parts):
+                    return path_parts[idx + 1]
         return None
 
     if platform == "facebook":
@@ -333,36 +346,90 @@ def validate_ingest_url(url: str, *, resolve_dns: bool = True) -> str:
 
 
 def _cookie_file_for_platform(platform: str) -> Path | None:
-    settings = get_settings()
-    mapping = {
-        "youtube": settings.cookies_youtube,
-        "instagram": settings.cookies_instagram,
-        "facebook": settings.cookies_facebook,
-    }
-    configured = mapping.get(platform, "")
-    if configured and Path(configured).exists():
-        return Path(configured)
-    default_path = settings.secrets_dir / "cookies" / f"{platform}.txt"
-    if default_path.exists():
-        return default_path
-    return None
+    res = resolve_cookie_file(platform, settings=get_settings())
+    return res.valid_path
 
 
-def _raise_cookie_blocker(platform: str, reason: str) -> None:
-    create_or_get_blocker(
+def _resolve_cookie_for_ingest(
+    platform: str,
+    *,
+    cookies_dir: Path | str | None = None,
+    cookie_file: Path | str | None = None,
+) -> tuple[Path | None, CookieStatus]:
+    if cookies_dir is None and cookie_file is None:
+        cookie_path = _cookie_file_for_platform(platform)
+        if cookie_path is not None:
+            return cookie_path, "valid"
+        # Inspect status (missing vs invalid) without changing _cookie_file_for_platform contract
+        res = resolve_cookie_file(platform, settings=get_settings())
+        return None, res.status
+    res = resolve_cookie_file(
+        platform,
+        cookies_dir=cookies_dir,
+        cookie_file=cookie_file,
+        settings=get_settings(),
+    )
+    return res.valid_path, res.status
+
+
+def _sanitize_blocker_reason(reason: str) -> str:
+    cleaned = redact_cookie_secrets(reason or "")
+    cleaned = " ".join(cleaned.split())[:180]
+    if detect_leaked_secret(cleaned):
+        return "Authentication required (details redacted)."
+    return cleaned or "Authentication required."
+
+
+def _raise_cookie_blocker(
+    platform: str,
+    reason: str,
+    *,
+    cookie_status: CookieStatus = "missing",
+    raise_exc: bool = True,
+    root_dir: Path | str | None = None,
+    state_dir: Path | str | None = None,
+) -> Blocker | None:
+    norm_platform = (platform or "instagram").strip().lower()
+    safe_reason = _sanitize_blocker_reason(reason)
+    if cookie_status == "invalid":
+        cookie_hint = (
+            f"Existing cookie file at secrets/cookies/{norm_platform}.txt is not valid Netscape "
+            f"cookies.txt format; re-export it and retry."
+        )
+    elif cookie_status == "valid":
+        cookie_hint = (
+            f"Configured cookies at secrets/cookies/{norm_platform}.txt may be expired or require "
+            f"a checkpoint/verification in your browser."
+        )
+    else:
+        cookie_hint = f"No valid cookie file was found at secrets/cookies/{norm_platform}.txt."
+
+    return create_or_get_blocker(
         btype=BlockerType.CREDENTIAL,
         task_id="T-2.2",
-        title=f"Browser cookies required for {platform.title()} download",
+        title=f"Browser cookies required for {norm_platform.title()} download",
         needed=[
             NeededItem(
-                key=f"COOKIES_{platform.upper()}",
-                where=f"secrets/cookies/{platform}.txt",
-                how_to_get=f"Export Netscape cookies.txt from a logged-in {platform.title()} browser tab.",
+                key=f"COOKIES_{norm_platform.upper()}",
+                where=f"secrets/cookies/{norm_platform}.txt",
+                how_to_get=(
+                    f"Log into {norm_platform.title()} in your browser, export Netscape-format "
+                    f"cookies.txt (e.g. via 'Get cookies.txt LOCALLY'), save to "
+                    f"secrets/cookies/{norm_platform}.txt, and retry the job."
+                ),
             )
         ],
-        why=f"yt-dlp encountered an authentication/rate-limit wall on {platform}: {reason[:180]}",
-        alternatives=["Upload the video file directly in the Web UI or test with sample:// clips."],
-        raise_exc=False,
+        why=(
+            f"yt-dlp encountered an authentication wall on {norm_platform}. "
+            f"{cookie_hint} Detail: {safe_reason}"
+        ),
+        alternatives=[
+            "Use a public video URL that does not require login.",
+            "Upload the video file directly in the Web UI or test with sample:// clips.",
+        ],
+        root_dir=Path(root_dir) if root_dir is not None else None,
+        state_dir=Path(state_dir) if state_dir is not None else None,
+        raise_exc=raise_exc,
     )
 
 
@@ -371,10 +438,20 @@ def classify_yt_dlp_error(exc: Exception | str, platform: str = "direct") -> Ing
     if isinstance(exc, IngestError):
         return exc
 
-    err_str = str(exc)
+    err_str = redact_cookie_secrets(str(exc))
     low = err_str.lower()
 
-    if any(tok in low for tok in ("429", "too many requests", "rate limit", "rate-limit", "throttl")):
+    if any(
+        tok in low
+        for tok in (
+            "429",
+            "too many requests",
+            "rate limit",
+            "rate-limit",
+            "throttl",
+            "please wait a few minutes",
+        )
+    ):
         return IngestError(
             "RATE_LIMITED",
             f"Rate limited by {platform}: {err_str}",
@@ -388,9 +465,13 @@ def classify_yt_dlp_error(exc: Exception | str, platform: str = "direct") -> Ing
             "private video",
             "this video is private",
             "video is private",
+            "this account is private",
+            "account is private",
             "members-only",
             "members only",
             "subscribers only",
+            "followers only",
+            "only visible to",
         )
     ):
         return IngestError(
@@ -409,6 +490,8 @@ def classify_yt_dlp_error(exc: Exception | str, platform: str = "direct") -> Ing
             "geoblocked",
             "geo restricted",
             "geo-restricted",
+            "not available in your region",
+            "country restriction",
         )
     ):
         return IngestError(
@@ -442,12 +525,29 @@ def classify_yt_dlp_error(exc: Exception | str, platform: str = "direct") -> Ing
                 "log in",
                 "sign in",
                 "cookies",
+                "cookie",
                 "authentication",
+                "unauthorized",
+                "not authorized",
                 "401",
                 "403",
                 "forbidden",
                 "not a bot",
                 "age-restricted",
+                "checkpoint",
+                "challenge_required",
+                "challenge required",
+                "security check",
+                "verify your account",
+                "confirm your identity",
+                "suspicious activity",
+                "session expired",
+                "expired session",
+                "token expired",
+                "invalid session",
+                "logged out",
+                "empty media response",
+                "must be logged in",
             )
         )
         or platform in ("instagram", "facebook")
@@ -617,7 +717,16 @@ def _resolve_sample_info(url: str) -> dict[str, Any]:
     }
 
 
-def probe_media(url: str, ydl_cls: Any = None) -> dict[str, Any]:
+def probe_media(
+    url: str,
+    ydl_cls: Any = None,
+    *,
+    cookies_dir: Path | str | None = None,
+    cookie_file: Path | str | None = None,
+    raise_blocker: bool = True,
+    root_dir: Path | str | None = None,
+    state_dir: Path | str | None = None,
+) -> dict[str, Any]:
     """Probe media metadata (title, duration, chapters, heatmap, estimated_bytes) without downloading."""
     validate_ingest_url(url)
     canon = canonicalize_url(url)
@@ -648,17 +757,33 @@ def probe_media(url: str, ydl_cls: Any = None) -> dict[str, Any]:
         "noplaylist": True,
         "skip_download": True,
     }
-    cookie_path = _cookie_file_for_platform(platform)
+    cookie_path, cookie_status = _resolve_cookie_for_ingest(
+        platform,
+        cookies_dir=cookies_dir,
+        cookie_file=cookie_file,
+    )
     if cookie_path:
         ydl_opts["cookiefile"] = str(cookie_path)
 
     try:
         with ydl_factory(ydl_opts) as ydl:
             info = ydl.extract_info(canon["canonical_url"], download=False) or {}
+    except BlockerRequired:
+        raise
     except Exception as exc:
         err = classify_yt_dlp_error(exc, platform=platform)
         if err.code == "LOGIN_REQUIRED":
-            _raise_cookie_blocker(platform, str(exc))
+            logger.warning("Ingest probe blocked by %s authentication wall", platform)
+            blocker = _raise_cookie_blocker(
+                platform,
+                str(exc),
+                cookie_status=cookie_status,
+                raise_exc=raise_blocker,
+                root_dir=root_dir,
+                state_dir=state_dir,
+            )
+            if blocker is not None:
+                err.blocker_id = getattr(blocker, "id", None)
         raise err from exc
 
     video_id = str(info.get("id")) if info.get("id") else canon["video_id"]
@@ -683,7 +808,17 @@ def probe_media(url: str, ydl_cls: Any = None) -> dict[str, Any]:
     }
 
 
-def download_and_normalize(url: str, job_dir: Path, *, ydl_cls: Any = None) -> dict[str, Any]:
+def download_and_normalize(
+    url: str,
+    job_dir: Path,
+    *,
+    ydl_cls: Any = None,
+    cookies_dir: Path | str | None = None,
+    cookie_file: Path | str | None = None,
+    raise_blocker: bool = True,
+    root_dir: Path | str | None = None,
+    state_dir: Path | str | None = None,
+) -> dict[str, Any]:
     """Download video from YouTube/Instagram/Facebook or local/sample URI, normalize to mezzanine MP4 + 16kHz WAV."""
     validate_ingest_url(url)
     canon = canonicalize_url(url)
@@ -723,7 +858,15 @@ def download_and_normalize(url: str, job_dir: Path, *, ydl_cls: Any = None) -> d
         meta_json.write_text(json.dumps(meta, indent=2), encoding="utf-8")
         return meta
 
-    probe = probe_media(url, ydl_cls=ydl_cls)
+    probe = probe_media(
+        url,
+        ydl_cls=ydl_cls,
+        cookies_dir=cookies_dir,
+        cookie_file=cookie_file,
+        raise_blocker=raise_blocker,
+        root_dir=root_dir,
+        state_dir=state_dir,
+    )
     check_ingest_guards(probe.get("duration"), probe.get("estimated_bytes"), target_dir=job_dir)
 
     # Real URL download via yt-dlp
@@ -737,7 +880,11 @@ def download_and_normalize(url: str, job_dir: Path, *, ydl_cls: Any = None) -> d
         "no_warnings": True,
         "noplaylist": True,
     }
-    cookie_path = _cookie_file_for_platform(platform)
+    cookie_path, cookie_status = _resolve_cookie_for_ingest(
+        platform,
+        cookies_dir=cookies_dir,
+        cookie_file=cookie_file,
+    )
     if cookie_path:
         ydl_opts["cookiefile"] = str(cookie_path)
 
@@ -749,10 +896,22 @@ def download_and_normalize(url: str, job_dir: Path, *, ydl_cls: Any = None) -> d
                 candidates = list(source_dir.glob("raw.*"))
                 if candidates:
                     downloaded = candidates[0]
+    except BlockerRequired:
+        raise
     except Exception as exc:
         err = classify_yt_dlp_error(exc, platform=platform)
         if err.code == "LOGIN_REQUIRED":
-            _raise_cookie_blocker(platform, str(exc))
+            logger.warning("Ingest download blocked by %s authentication wall", platform)
+            blocker = _raise_cookie_blocker(
+                platform,
+                str(exc),
+                cookie_status=cookie_status,
+                raise_exc=raise_blocker,
+                root_dir=root_dir,
+                state_dir=state_dir,
+            )
+            if blocker is not None:
+                err.blocker_id = getattr(blocker, "id", None)
         raise err from exc
 
     if not downloaded.exists():
