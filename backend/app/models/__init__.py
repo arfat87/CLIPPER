@@ -1,3 +1,41 @@
-from backend.app.models.entities import Clip, Job, JobStatus, StageCheckpoint
+from backend.app.models.entities import (
+    AuditLog,
+    BlockerRecord,
+    Clip,
+    DriveFile,
+    DriveState,
+    FeedbackEvent,
+    Font,
+    Job,
+    JobStatus,
+    Preset,
+    PromptVersion,
+    PublishPack,
+    Render,
+    Setting,
+    StageCheckpoint,
+    Template,
+    TemplateVersion,
+    Transcript,
+)
 
-__all__ = ["Clip", "Job", "JobStatus", "StageCheckpoint"]
+__all__ = [
+    "AuditLog",
+    "BlockerRecord",
+    "Clip",
+    "DriveFile",
+    "DriveState",
+    "FeedbackEvent",
+    "Font",
+    "Job",
+    "JobStatus",
+    "Preset",
+    "PromptVersion",
+    "PublishPack",
+    "Render",
+    "Setting",
+    "StageCheckpoint",
+    "Template",
+    "TemplateVersion",
+    "Transcript",
+]

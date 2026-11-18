@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "jsonschema>=4.23.0",
     "numpy>=1.26.4",
+    "alembic==1.14.1",  # T-1.1 reversible SQLite/Postgres schema migrations
 ]
 
 [project.optional-dependencies]
