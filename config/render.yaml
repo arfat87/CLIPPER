@@ -1,4 +1,5 @@
-# CLIPPER — Config: Render
+# CLIPPER — Config: Render (v1 + Spec v2 profiles)
+version: 1
 default_aspect: "9:16"
 resolutions:
   "9:16": [1080, 1920]
@@ -10,6 +11,127 @@ crf: 21
 preset: veryfast
 audio_codec: aac
 audio_bitrate: 160k
-loudnorm_i: -14.0
+loudnorm_i: -16.0
 loudnorm_tp: -1.5
 loudnorm_lra: 11.0
+loudnorm_filter: "loudnorm=I=-16:TP=-1.5:LRA=11"
+movflags: "+faststart"
+
+loudness:
+  integrated_lufs: -16.0
+  true_peak_db: -1.5
+  lra: 11.0
+  tolerance_lu: 1.0
+  filter: "loudnorm=I=-16:TP=-1.5:LRA=11"
+
+encoder:
+  prefer: auto
+  cpu: libx264
+  gpu: h264_nvenc
+
+max_parallel:
+  cpu: 2
+  nvenc: 1
+
+profiles:
+  youtube_shorts:
+    aspect: "9:16"
+    w: 1080
+    h: 1920
+    fps: 30
+    video_codec: libx264
+    gpu_codec: h264_nvenc
+    crf: 20
+    preset: medium
+    pix_fmt: yuv420p
+    audio_codec: aac
+    audio_bitrate: 160k
+    audio_kbps: 160
+    loudnorm: "loudnorm=I=-16:TP=-1.5:LRA=11"
+    movflags: "+faststart"
+    max_duration_s: 180
+  reels:
+    aspect: "9:16"
+    w: 1080
+    h: 1920
+    fps: 30
+    video_codec: libx264
+    gpu_codec: h264_nvenc
+    crf: 20
+    preset: medium
+    pix_fmt: yuv420p
+    audio_codec: aac
+    audio_bitrate: 160k
+    audio_kbps: 160
+    loudnorm: "loudnorm=I=-16:TP=-1.5:LRA=11"
+    movflags: "+faststart"
+    max_duration_s: 180
+  tiktok:
+    aspect: "9:16"
+    w: 1080
+    h: 1920
+    fps: 30
+    video_codec: libx264
+    gpu_codec: h264_nvenc
+    crf: 20
+    preset: medium
+    pix_fmt: yuv420p
+    audio_codec: aac
+    audio_bitrate: 160k
+    audio_kbps: 160
+    loudnorm: "loudnorm=I=-16:TP=-1.5:LRA=11"
+    movflags: "+faststart"
+    max_duration_s: 180
+  square_1x1:
+    aspect: "1:1"
+    w: 1080
+    h: 1080
+    fps: 30
+    video_codec: libx264
+    gpu_codec: h264_nvenc
+    crf: 20
+    preset: medium
+    pix_fmt: yuv420p
+    audio_codec: aac
+    audio_bitrate: 160k
+    audio_kbps: 160
+    loudnorm: "loudnorm=I=-16:TP=-1.5:LRA=11"
+    movflags: "+faststart"
+    max_duration_s: 180
+  portrait_4x5:
+    aspect: "4:5"
+    w: 1080
+    h: 1350
+    fps: 30
+    video_codec: libx264
+    gpu_codec: h264_nvenc
+    crf: 20
+    preset: medium
+    pix_fmt: yuv420p
+    audio_codec: aac
+    audio_bitrate: 160k
+    audio_kbps: 160
+    loudnorm: "loudnorm=I=-16:TP=-1.5:LRA=11"
+    movflags: "+faststart"
+    max_duration_s: 180
+  draft_fast:
+    aspect: "9:16"
+    w: 540
+    h: 960
+    fps: 30
+    video_codec: libx264
+    gpu_codec: h264_nvenc
+    crf: 28
+    preset: ultrafast
+    pix_fmt: yuv420p
+    audio_codec: aac
+    audio_bitrate: 96k
+    audio_kbps: 96
+    loudnorm: "loudnorm=I=-16:TP=-1.5:LRA=11"
+    movflags: "+faststart"
+    max_duration_s: 180
+
+thumbnail:
+  at: hook
+  format: jpg
+  quality: 90
