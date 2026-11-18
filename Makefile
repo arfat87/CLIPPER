@@ -3,6 +3,7 @@
 PYTHON := .venv/bin/python
 PYTEST := .venv/bin/pytest
 RUFF := .venv/bin/ruff
+MYPY := .venv/bin/mypy
 UVICORN := .venv/bin/uvicorn
 
 dev:
@@ -22,9 +23,13 @@ test:
 	$(PYTEST) -v
 
 lint:
-	$(RUFF) check backend hitl
+	$(RUFF) check backend hitl scripts
+	$(MYPY) hitl backend/app/config.py scripts/secret_scan.py
 
-check: lint test
+secret-scan:
+	$(PYTHON) scripts/secret_scan.py
+
+check: lint secret-scan test
 
 render-sample:
 	$(PYTHON) -m backend.pipeline.sample_generator

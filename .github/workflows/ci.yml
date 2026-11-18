@@ -1,0 +1,45 @@
+name: CLIPPER CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fontconfig fonts-noto-core
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv and Python dependencies
+        run: |
+          python -m pip install --upgrade pip uv
+          uv venv .venv
+          uv pip install --python .venv/bin/python -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: .venv/bin/ruff check backend hitl scripts
+
+      - name: Typecheck (mypy)
+        run: .venv/bin/mypy hitl backend/app/config.py scripts/secret_scan.py
+
+      - name: Secret scan
+        run: .venv/bin/python scripts/secret_scan.py
+
+      - name: Run HITL tests
+        run: .venv/bin/pytest hitl/tests/ -v
+
+      - name: Run backend tests
+        run: .venv/bin/pytest backend/tests/ -v
