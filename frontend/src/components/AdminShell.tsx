@@ -14,20 +14,24 @@ import {
   Sparkles,
   Type,
 } from "lucide-react";
+import { ApiError } from "../api/client";
 import {
   useAdminAuditQuery,
   useAdminBlockersQuery,
   useAdminSettingsQuery,
-  useAdminTemplatesQuery,
   useDriveStatusQuery,
   useHealthQuery,
   useJobsQuery,
-  usePresetsQuery,
 } from "../api/hooks";
-import { ApiError } from "../api/client";
 import { en } from "../i18n/en";
 import { ADMIN_SECTIONS, navigateToAdmin, navigateToTab } from "../router";
 import { type AdminSection, useStudioStore } from "../store/studioStore";
+import {
+  AdminBrandKitsView,
+  AdminFontsView,
+  AdminPresetsView,
+} from "./admin/AdminAssetsViews";
+import { AdminTemplatesView } from "./admin/AdminTemplatesView";
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from "./StateViews";
 import {
   Badge,
@@ -58,8 +62,6 @@ const ADMIN_ICONS: Record<AdminSection, typeof Palette> = {
 export function AdminShell() {
   const { adminSection, simulation } = useStudioStore();
 
-  const templatesQuery = useAdminTemplatesQuery();
-  const presetsQuery = usePresetsQuery();
   const blockersQuery = useAdminBlockersQuery();
   const settingsQuery = useAdminSettingsQuery();
   const driveQuery = useDriveStatusQuery();
@@ -79,84 +81,17 @@ export function AdminShell() {
     }
 
     switch (adminSection) {
-      case "templates": {
-        if (templatesQuery.isLoading) return <LoadingState />;
-        if (templatesQuery.isError) {
-          return (
-            <ErrorState
-              title={en.admin.errorTitle}
-              message={
-                templatesQuery.error instanceof ApiError
-                  ? templatesQuery.error.message
-                  : en.states.errorBody
-              }
-              onRetry={() => void templatesQuery.refetch()}
-            />
-          );
-        }
-        const items = templatesQuery.data?.items ?? [];
-        if (items.length === 0) {
-          return (
-            <EmptyState
-              title={en.admin.emptyTitle}
-              body={en.admin.emptyBody}
-            />
-          );
-        }
-        return (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((tpl) => (
-              <Card key={tpl.id}>
-                <CardHeader>
-                  <CardTitle>{tpl.name}</CardTitle>
-                  <StatusBadge status={tpl.status} />
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-text-dim">
-                  <p>
-                    Kind: <span className="text-text">{tpl.kind}</span> · v
-                    {tpl.latest_version}
-                  </p>
-                  <p>
-                    Source: <span className="text-text">{tpl.source ?? "builtin"}</span>
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        );
-      }
+      case "templates":
+        return <AdminTemplatesView />;
 
-      case "presets": {
-        if (presetsQuery.isLoading) return <LoadingState />;
-        const items = presetsQuery.data?.items ?? [];
-        if (items.length === 0) {
-          return (
-            <EmptyState
-              title={en.admin.emptyTitle}
-              body={en.admin.emptyBody}
-            />
-          );
-        }
-        return (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {items.map((preset) => (
-              <Card key={preset.id}>
-                <CardHeader>
-                  <CardTitle>{preset.name}</CardTitle>
-                  {preset.is_default ? (
-                    <Badge tone="accent">{en.templates.activePreset}</Badge>
-                  ) : null}
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-text-dim">
-                  <p>Caption: {preset.caption}</p>
-                  <p>Layout: {preset.layout}</p>
-                  <p>Render profile: {preset.render_profile}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        );
-      }
+      case "presets":
+        return <AdminPresetsView />;
+
+      case "fonts":
+        return <AdminFontsView />;
+
+      case "brandkits":
+        return <AdminBrandKitsView />;
 
       case "blockers": {
         if (blockersQuery.isLoading) return <LoadingState />;
