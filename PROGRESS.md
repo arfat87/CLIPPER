@@ -22,4 +22,9 @@
 - **[DONE] Spec Pack v2 Sync (from Google Drive `CLIPPER/clipper-spec.zip`):**
   - Synced `docs/` (10 architectural modules + original blueprint), `contracts/schemas/*.json`, `.agents/rules/*`, `.agents/skills/*`, `.clipper-state/tasks.yaml`, `config/prompts/*.md`, `config/{drive,platforms}.yaml`, `assets/samples/fixtures/*`, `BLOCKERS.md`, and `DECISIONS.md`.
   - Preserved v1 runtime compatibility (`config/{asr,highlights,render}.yaml` and `assets/templates/*/template.json`); placed v2 starter templates under `assets/templates_v2/` and v2 configs under `config/spec_v2/` pending Phase 6 schema migration (`T-6.3`).
+- **[DONE] Phase 0 Orchestrator (`T-0.2`, `T-0.3`):**
+  - `T-0.2` Verified all 6 `.agents/rules/*.md` (`00-global`, `50-security` always-on; `10-backend`, `20-pipeline`, `30-frontend`, `40-templates-captions` glob-triggered) and 5 workspace `.agents/skills/*/SKILL.md`.
+  - `T-0.3` Converted `API_SPEC.md` + `ADMIN_PANEL_SPEC.md` into `contracts/openapi.yaml` (validated with `openapi-spec-validator`), added `drive_manifest.example.json` fixture, validated all 5 JSON schemas (`contracts/schemas/*.json`), and tagged `contracts-v1`.
+  - Recorded Day-0 machine facts in `DECISIONS.md`; raised `BLK-0001` for missing Devanagari/Bengali fonts (`T-0.4`).
+
 

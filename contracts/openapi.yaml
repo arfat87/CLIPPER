@@ -1,0 +1,1957 @@
+openapi: 3.1.0
+info:
+  title: CLIPPER API
+  version: 1.0.0
+  description: >
+    Local-first, Indic-aware AI Video Clipping & Multilingual Captioning API (`/api/v1`).
+    Frozen contract (`contracts-v1`) generated from `docs/02_architecture/API_SPEC.md`
+    and `docs/01_product/ADMIN_PANEL_SPEC.md`.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+tags:
+  - name: Jobs
+  - name: Clips
+  - name: Templates
+  - name: Uploads
+  - name: Drive
+  - name: Admin
+  - name: Health
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: System & toolchain health check
+      responses:
+        "200":
+          description: System health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /jobs:
+    post:
+      tags: [Jobs]
+      operationId: createJob
+      summary: Create a clipping job from URL, upload, or Google Drive file
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "201":
+          description: Job created and queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ErrorResponse"
+    get:
+      tags: [Jobs]
+      operationId: listJobs
+      summary: List jobs with cursor pagination
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/JobStatus"
+      responses:
+        "200":
+          description: Paginated list of jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedJobs"
+
+  /jobs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Get full job details including stages, clips summary, and warnings
+      responses:
+        "200":
+          description: Job detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Jobs]
+      operationId: deleteJob
+      summary: Delete a job and all associated media/render artifacts
+      responses:
+        "204":
+          description: Job deleted
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{id}/retry:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Jobs]
+      operationId: retryJob
+      summary: Retry job from specified stage or first invalid/incomplete stage
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_stage:
+                  $ref: "#/components/schemas/StageName"
+      responses:
+        "202":
+          description: Job re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Jobs]
+      operationId: cancelJob
+      summary: Cooperatively cancel a running or queued job
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+
+  /jobs/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          type: string
+    get:
+      tags: [Jobs]
+      operationId: streamJobEvents
+      summary: Server-Sent Events stream for job progress, state changes, warnings, and completion
+      responses:
+        "200":
+          description: SSE event stream (`progress`, `state`, `warning`, `done`)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /jobs/{id}/transcript:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Jobs]
+      operationId: getJobTranscript
+      summary: Retrieve word-level transcript JSON
+      responses:
+        "200":
+          description: Transcript JSON conforming to `transcript.schema.json`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transcript"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    patch:
+      tags: [Jobs]
+      operationId: patchJobTranscript
+      summary: Edit individual words in transcript (marks dependent stages STALE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [edits]
+              properties:
+                edits:
+                  type: array
+                  items:
+                    type: object
+                    required: [idx, text]
+                    properties:
+                      idx:
+                        type: integer
+                        minimum: 0
+                      text:
+                        type: string
+      responses:
+        "200":
+          description: Updated transcript
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transcript"
+
+  /jobs/{id}/reselect:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Jobs]
+      operationId: reselectJobClips
+      summary: Re-run highlight selection with updated Clip Brief or threshold
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clip_brief:
+                  type: string
+                threshold:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                max_clips:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+      responses:
+        "202":
+          description: Selection re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+
+  /jobs/{id}/render-all:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Jobs]
+      operationId: renderAllJobClips
+      summary: Render all clips for a job with optional preset override
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preset_id:
+                  type: string
+      responses:
+        "202":
+          description: Batch render queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+
+  /jobs/{id}/download.zip:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Jobs]
+      operationId: downloadJobZip
+      summary: Download ZIP archive of all clip renders, sidecars, and publish packs
+      responses:
+        "200":
+          description: ZIP bundle
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+
+  /clips/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Clips]
+      operationId: getClip
+      summary: Get clip summary and authoritative `clip_plan`
+      responses:
+        "200":
+          description: Clip detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClipDetail"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    patch:
+      tags: [Clips]
+      operationId: patchClip
+      summary: RFC-7396 JSON Merge Patch on `clip_plan` (trim, ops, layout, preset, caption overrides)
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties: true
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated clip detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClipDetail"
+
+  /clips/{id}/render:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Clips]
+      operationId: renderClip
+      summary: Trigger a render for a single clip
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preset_id:
+                  type: string
+                aspect:
+                  $ref: "#/components/schemas/AspectRatio"
+                profile:
+                  type: string
+      responses:
+        "202":
+          description: Render enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenderRecord"
+
+  /clips/{id}/renders:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Clips]
+      operationId: listClipRenders
+      summary: List renders for a clip
+      responses:
+        "200":
+          description: Clip renders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RenderRecord"
+
+  /clips/{id}/publish-pack:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Clips]
+      operationId: getClipPublishPack
+      summary: Get Publish Pack for a clip
+      responses:
+        "200":
+          description: Publish Pack conforming to `publish_pack.schema.json`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishPack"
+    put:
+      tags: [Clips]
+      operationId: updateClipPublishPack
+      summary: Edit Publish Pack title/description/hashtags with server limit validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 5000
+                hashtags:
+                  type: array
+                  items:
+                    type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                pinned_comment:
+                  type: [string, "null"]
+      responses:
+        "200":
+          description: Validated Publish Pack
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishPack"
+
+  /clips/{id}/publish-pack/regenerate:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Clips]
+      operationId: regenerateClipPublishPack
+      summary: Regenerate Publish Pack using LLM and selected publish template
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                template_id:
+                  type: string
+                platform:
+                  $ref: "#/components/schemas/PlatformTarget"
+      responses:
+        "200":
+          description: Regenerated Publish Pack
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishPack"
+
+  /clips/{id}/feedback:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Clips]
+      operationId: submitClipFeedback
+      summary: Submit thumbs up/down and optional actual view count for scoring feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+                  enum: [up, down]
+                actual_views:
+                  type: integer
+                  minimum: 0
+      responses:
+        "200":
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClipDetail"
+
+  /renders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Clips]
+      operationId: getRender
+      summary: Get render status and metadata
+      responses:
+        "200":
+          description: Render record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenderRecord"
+
+  /renders/{id}/file:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Clips]
+      operationId: getRenderFile
+      summary: Stream or download rendered MP4 file
+      responses:
+        "200":
+          description: Rendered MP4 video
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+
+  /templates:
+    get:
+      tags: [Templates]
+      operationId: listTemplates
+      summary: List templates filtered by kind and lifecycle status
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TemplateKind"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TemplateStatus"
+      responses:
+        "200":
+          description: Template list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TemplateSummary"
+
+  /templates/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Templates]
+      operationId: getTemplate
+      summary: Get template details
+      responses:
+        "200":
+          description: Template payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateSummary"
+
+  /templates/{id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Templates]
+      operationId: listTemplateVersions
+      summary: List immutable versions of a template
+      responses:
+        "200":
+          description: Template versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /templates/{id}/preview:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Templates]
+      operationId: previewTemplate
+      summary: Render a server-side libass test-frame PNG for the template
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                language:
+                  $ref: "#/components/schemas/LanguageCode"
+                sample_text:
+                  type: string
+      responses:
+        "200":
+          description: Rendered PNG preview frame
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+
+  /presets:
+    get:
+      tags: [Templates]
+      operationId: listPresets
+      summary: List available preset bundles
+      responses:
+        "200":
+          description: Presets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Preset"
+
+  /uploads:
+    post:
+      tags: [Uploads]
+      operationId: initUpload
+      summary: Initialize a chunked video upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, size_bytes]
+              properties:
+                filename:
+                  type: string
+                size_bytes:
+                  type: integer
+                  minimum: 1
+                mime_type:
+                  type: string
+      responses:
+        "201":
+          description: Upload session initialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSession"
+
+  /uploads/{id}/chunk:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+      - name: n
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+    put:
+      tags: [Uploads]
+      operationId: uploadChunk
+      summary: Upload chunk `n` of a video upload
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Chunk acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSession"
+
+  /uploads/{id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Uploads]
+      operationId: completeUpload
+      summary: Assemble uploaded chunks into a ready source upload reference
+      responses:
+        "200":
+          description: Upload completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSession"
+
+  /drive/status:
+    get:
+      tags: [Drive]
+      operationId: getDriveStatus
+      summary: Get Google Drive sync status
+      responses:
+        "200":
+          description: Drive status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveStatus"
+
+  /drive/sync:
+    post:
+      tags: [Drive]
+      operationId: triggerDriveSync
+      summary: Trigger incremental or full Drive workspace sync
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full:
+                  type: boolean
+                  default: false
+      responses:
+        "202":
+          description: Sync triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveStatus"
+
+  /drive/tree:
+    get:
+      tags: [Drive]
+      operationId: getDriveTree
+      summary: Retrieve Drive manifest and generated TREE markdown
+      responses:
+        "200":
+          description: Drive tree and manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tree_md, manifest]
+                properties:
+                  tree_md:
+                    type: string
+                  manifest:
+                    type: object
+                    additionalProperties: true
+
+  /drive/files:
+    get:
+      tags: [Drive]
+      operationId: listDriveFiles
+      summary: List mirrored Drive files filtered by route
+      parameters:
+        - name: route
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [source, template, font, brandkit, doc, reference, export, unsorted]
+      responses:
+        "200":
+          description: Drive files list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /drive/pick:
+    post:
+      tags: [Drive]
+      operationId: pickDriveFile
+      summary: Convert a Drive file ID into an upload-like source reference for job creation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_id]
+              properties:
+                file_id:
+                  type: string
+      responses:
+        "200":
+          description: Source reference
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [drive_file_id, source_ref]
+                properties:
+                  drive_file_id:
+                    type: string
+                  source_ref:
+                    type: string
+
+  /admin/auth/login:
+    post:
+      tags: [Admin]
+      operationId: adminLogin
+      summary: Authenticate owner session for `/admin/*` endpoints
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Session cookie issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /admin/templates:
+    get:
+      tags: [Admin]
+      operationId: adminListTemplates
+      security: [{ adminSession: [] }]
+      summary: Admin list of all templates across statuses
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TemplateSummary"
+    post:
+      tags: [Admin]
+      operationId: adminImportTemplate
+      security: [{ adminSession: [] }]
+      summary: Import template JSON or `.cliptpl.zip` package
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Imported as draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateSummary"
+
+  /admin/templates/{id}/publish:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Admin]
+      operationId: adminPublishTemplate
+      security: [{ adminSession: [] }]
+      summary: Publish a validated template version (immutable)
+      responses:
+        "200":
+          description: Published template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateSummary"
+
+  /admin/templates/{id}/archive:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Admin]
+      operationId: adminArchiveTemplate
+      security: [{ adminSession: [] }]
+      summary: Archive a template from pickers while preserving existing clips
+      responses:
+        "200":
+          description: Archived template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateSummary"
+
+  /admin/templates/{id}/duplicate:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Admin]
+      operationId: adminDuplicateTemplate
+      security: [{ adminSession: [] }]
+      summary: Duplicate an existing template into a new draft
+      responses:
+        "201":
+          description: Duplicated draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateSummary"
+
+  /admin/templates/{id}/export:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Admin]
+      operationId: adminExportTemplate
+      security: [{ adminSession: [] }]
+      summary: Export template bundle as `.cliptpl.zip`
+      responses:
+        "200":
+          description: "`.cliptpl.zip` archive"
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+
+  /admin/presets:
+    get:
+      tags: [Admin]
+      operationId: adminListPresets
+      security: [{ adminSession: [] }]
+      summary: List presets
+      responses:
+        "200":
+          description: Presets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Preset"
+    post:
+      tags: [Admin]
+      operationId: adminSavePreset
+      security: [{ adminSession: [] }]
+      summary: Create or update a preset bundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Preset"
+      responses:
+        "200":
+          description: Saved preset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preset"
+
+  /admin/fonts:
+    get:
+      tags: [Admin]
+      operationId: adminListFonts
+      security: [{ adminSession: [] }]
+      summary: List registered fonts with script glyph coverage and license status
+      responses:
+        "200":
+          description: Fonts list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    post:
+      tags: [Admin]
+      operationId: adminUploadFont
+      security: [{ adminSession: [] }]
+      summary: Upload and register a font with license metadata
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, license]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                license:
+                  type: string
+      responses:
+        "201":
+          description: Registered font
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/brandkits:
+    get:
+      tags: [Admin]
+      operationId: adminListBrandKits
+      security: [{ adminSession: [] }]
+      summary: List brand kits
+      responses:
+        "200":
+          description: Brand kits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    post:
+      tags: [Admin]
+      operationId: adminCreateBrandKit
+      security: [{ adminSession: [] }]
+      summary: Create or update a brand kit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Saved brand kit
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/prompts:
+    get:
+      tags: [Admin]
+      operationId: adminListPrompts
+      security: [{ adminSession: [] }]
+      summary: List versioned prompt files (`config/prompts/*.md`)
+      responses:
+        "200":
+          description: Prompts list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /admin/prompts/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Admin]
+      operationId: adminGetPrompt
+      security: [{ adminSession: [] }]
+      summary: Get prompt content and versions
+      responses:
+        "200":
+          description: Prompt detail
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    put:
+      tags: [Admin]
+      operationId: adminUpdatePrompt
+      security: [{ adminSession: [] }]
+      summary: Save a new prompt version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        "200":
+          description: New prompt version saved
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/prompts/{name}/activate:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Admin]
+      operationId: adminActivatePrompt
+      security: [{ adminSession: [] }]
+      summary: Activate a specific prompt version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+      responses:
+        "200":
+          description: Prompt version activated
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/prompts/{name}/test:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Admin]
+      operationId: adminTestPrompt
+      security: [{ adminSession: [] }]
+      summary: Test prompt against fixture transcript and verify schema-valid JSON output
+      responses:
+        "200":
+          description: Test execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/scoring:
+    get:
+      tags: [Admin]
+      operationId: adminGetScoring
+      security: [{ adminSession: [] }]
+      summary: Get highlight fusion weights and thresholds per genre
+      responses:
+        "200":
+          description: Scoring configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    put:
+      tags: [Admin]
+      operationId: adminUpdateScoring
+      security: [{ adminSession: [] }]
+      summary: Update scoring weights and thresholds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated scoring configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/scoring/dry-run:
+    post:
+      tags: [Admin]
+      operationId: adminDryRunScoring
+      security: [{ adminSession: [] }]
+      summary: Compare old vs new highlight picks on an existing job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id]
+              properties:
+                job_id:
+                  type: string
+                weights:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Dry-run comparison
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/settings:
+    get:
+      tags: [Admin]
+      operationId: adminGetSettings
+      security: [{ adminSession: [] }]
+      summary: "Get non-secret settings; secrets report `{ set: true | false }` only"
+      responses:
+        "200":
+          description: Settings view (never returns secret values)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    put:
+      tags: [Admin]
+      operationId: adminUpdateSettings
+      security: [{ adminSession: [] }]
+      summary: Update non-secret application settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /admin/drive:
+    get:
+      tags: [Admin]
+      operationId: adminGetDrive
+      security: [{ adminSession: [] }]
+      summary: Admin Drive configuration, routing rules, and sync errors
+      responses:
+        "200":
+          description: Admin Drive view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveStatus"
+
+  /admin/blockers:
+    get:
+      tags: [Admin]
+      operationId: adminListBlockers
+      security: [{ adminSession: [] }]
+      summary: List open and resolved HITL blockers
+      responses:
+        "200":
+          description: Blockers list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Blocker"
+
+  /admin/blockers/{id}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Admin]
+      operationId: adminResolveBlocker
+      security: [{ adminSession: [] }]
+      summary: Validate and resolve a HITL blocker
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Blocker resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Blocker"
+
+  /admin/jobs:
+    get:
+      tags: [Admin]
+      operationId: adminListJobs
+      security: [{ adminSession: [] }]
+      summary: Browse all jobs with disk usage and artifact explorer metadata
+      responses:
+        "200":
+          description: Admin jobs list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedJobs"
+
+  /admin/audit:
+    get:
+      tags: [Admin]
+      operationId: adminAuditLog
+      security: [{ adminSession: [] }]
+      summary: List audited admin write actions
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  next_cursor:
+                    type: [string, "null"]
+
+components:
+  securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: clipper_admin_session
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+
+  responses:
+    ErrorResponse:
+      description: Structured API error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - LOGIN_REQUIRED
+        - GEO_BLOCKED
+        - PRIVATE_VIDEO
+        - UNSUPPORTED_URL
+        - TOO_LONG
+        - DISK_FULL
+        - ASR_FAILED
+        - LLM_UNAVAILABLE
+        - NO_CLIPS_FOUND
+        - TEMPLATE_INVALID
+        - FONT_MISSING
+        - RENDER_FAILED
+        - DRIVE_AUTH
+        - DRIVE_NOT_FOUND
+        - BLOCKER_REQUIRED
+        - RATE_LIMITED
+        - VALIDATION_ERROR
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code:
+              $ref: "#/components/schemas/ErrorCode"
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+            retryable:
+              type: boolean
+
+    LanguageCode:
+      type: string
+      enum: [auto, en, hi, hinglish, bn]
+
+    ScriptPref:
+      type: string
+      enum: [auto, latn, native]
+
+    AspectRatio:
+      type: string
+      enum: ["9:16", "1:1", "4:5"]
+
+    StageName:
+      type: string
+      enum: [fetch, prepare, transcribe, analyze, select, render, package]
+
+    JobStatus:
+      type: string
+      enum:
+        - QUEUED
+        - FETCHING
+        - PREPARING
+        - TRANSCRIBING
+        - ANALYZING
+        - SELECTING
+        - AWAITING_REVIEW
+        - RENDERING
+        - PACKAGING
+        - COMPLETED
+        - FAILED
+        - CANCELLED
+
+    PlatformTarget:
+      type: string
+      enum: [youtube_shorts, instagram_reels, tiktok, facebook_reels]
+
+    TemplateKind:
+      type: string
+      enum: [caption, layout, brand_kit, overlay, publish, preset]
+
+    TemplateStatus:
+      type: string
+      enum: [draft, published, archived, invalid]
+
+    CreateJobRequest:
+      type: object
+      required: [source, rights_confirmed]
+      properties:
+        source:
+          type: object
+          required: [kind]
+          properties:
+            kind:
+              type: string
+              enum: [url, upload, drive]
+            url:
+              type: string
+              format: uri
+            upload_id:
+              type: string
+            drive_file_id:
+              type: string
+        language:
+          $ref: "#/components/schemas/LanguageCode"
+          default: auto
+        script_pref:
+          $ref: "#/components/schemas/ScriptPref"
+          default: auto
+        aspect:
+          $ref: "#/components/schemas/AspectRatio"
+          default: "9:16"
+        preset_id:
+          type: string
+          default: default
+        auto_mode:
+          type: boolean
+          default: true
+        max_clips:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 8
+        clip_brief:
+          type: [string, "null"]
+        rights_confirmed:
+          type: boolean
+          const: true
+
+    StageCheckpoint:
+      type: object
+      required: [stage, status]
+      properties:
+        stage:
+          $ref: "#/components/schemas/StageName"
+        status:
+          type: string
+          enum: [PENDING, RUNNING, DONE, FAILED, STALE]
+        attempt:
+          type: integer
+        started_at:
+          type: [string, "null"]
+          format: date-time
+        finished_at:
+          type: [string, "null"]
+          format: date-time
+        metrics:
+          type: object
+          additionalProperties: true
+
+    ClipSummary:
+      type: object
+      required: [id, job_id, rank, start_s, end_s, score, status]
+      properties:
+        id:
+          type: string
+        job_id:
+          type: string
+        rank:
+          type: integer
+        start_s:
+          type: number
+        end_s:
+          type: number
+        score:
+          type: number
+        score_mode:
+          type: string
+          enum: [hybrid, signals_only]
+        title:
+          type: [string, "null"]
+        reason:
+          type: [string, "null"]
+        hook_line:
+          type: [string, "null"]
+        layout:
+          type: string
+        preset_id:
+          type: [string, "null"]
+        status:
+          type: string
+        feedback:
+          type: [string, "null"]
+          enum: [up, down, null]
+        actual_views:
+          type: [integer, "null"]
+
+    JobDetail:
+      type: object
+      required: [id, status, source_kind, language, created_at]
+      properties:
+        id:
+          type: string
+        source_kind:
+          type: string
+          enum: [url, upload, drive]
+        source_url:
+          type: [string, "null"]
+        source_ref:
+          type: [string, "null"]
+        platform:
+          type: [string, "null"]
+        title:
+          type: [string, "null"]
+        duration_s:
+          type: [number, "null"]
+        language:
+          type: string
+        script:
+          type: [string, "null"]
+        genre:
+          type: [string, "null"]
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        stage:
+          type: [string, "null"]
+        error_code:
+          type: [string, "null"]
+        error_message:
+          type: [string, "null"]
+        auto_mode:
+          type: boolean
+        preset_id:
+          type: [string, "null"]
+        warnings:
+          type: array
+          items:
+            type: string
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/StageCheckpoint"
+        clips:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClipSummary"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+
+    PaginatedJobs:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobDetail"
+        next_cursor:
+          type: [string, "null"]
+
+    ClipDetail:
+      allOf:
+        - $ref: "#/components/schemas/ClipSummary"
+        - type: object
+          required: [clip_plan]
+          properties:
+            clip_plan:
+              type: object
+              additionalProperties: true
+            score_breakdown:
+              type: object
+              additionalProperties: true
+
+    RenderRecord:
+      type: object
+      required: [id, clip_id, status, aspect, profile]
+      properties:
+        id:
+          type: string
+        clip_id:
+          type: string
+        plan_hash:
+          type: string
+        aspect:
+          $ref: "#/components/schemas/AspectRatio"
+        profile:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, RUNNING, DONE, FAILED]
+        progress_pct:
+          type: number
+        duration_s:
+          type: [number, "null"]
+        file_url:
+          type: [string, "null"]
+        thumb_url:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+
+    Transcript:
+      type: object
+      required: [schema_version, language, script, duration, engine, segments]
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        language:
+          type: string
+          enum: [en, hi, hinglish, bn]
+        script:
+          type: string
+          enum: [latn, deva, beng]
+        duration:
+          type: number
+        engine:
+          type: string
+        segments:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    PublishPack:
+      type: object
+      required: [schema_version, clip_id, platform, language, title, description, hashtags, valid]
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        clip_id:
+          type: string
+        platform:
+          $ref: "#/components/schemas/PlatformTarget"
+        language:
+          type: string
+          enum: [en, hi, hinglish, bn]
+        title:
+          type: string
+          maxLength: 100
+        title_options:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+          maxLength: 5000
+        hashtags:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        pinned_comment:
+          type: [string, "null"]
+        hook_line:
+          type: [string, "null"]
+        valid:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+
+    TemplateSummary:
+      type: object
+      required: [id, kind, name, status, latest_version]
+      properties:
+        id:
+          type: string
+        kind:
+          $ref: "#/components/schemas/TemplateKind"
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/TemplateStatus"
+        latest_version:
+          type: integer
+        source:
+          type: string
+        valid:
+          type: boolean
+        validation_error:
+          type: [string, "null"]
+
+    Preset:
+      type: object
+      required: [id, name, version, caption, layout, publish, render_profile]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+        caption:
+          type: string
+        layout:
+          type: string
+        brand_kit:
+          type: [string, "null"]
+        overlays:
+          type: array
+          items:
+            type: string
+        publish:
+          type: string
+        render_profile:
+          type: string
+        is_default:
+          type: boolean
+
+    UploadSession:
+      type: object
+      required: [id, filename, status]
+      properties:
+        id:
+          type: string
+        filename:
+          type: string
+        size_bytes:
+          type: integer
+        received_chunks:
+          type: integer
+        status:
+          type: string
+          enum: [INIT, UPLOADING, COMPLETED]
+        upload_id:
+          type: [string, "null"]
+
+    DriveStatus:
+      type: object
+      required: [enabled, status]
+      properties:
+        enabled:
+          type: boolean
+        status:
+          type: string
+          enum: [CONNECTED, AUTH_ERROR, STALE, DISABLED, NOT_FOUND]
+        root_folder_id:
+          type: [string, "null"]
+        last_sync_at:
+          type: [string, "null"]
+          format: date-time
+        last_error:
+          type: [string, "null"]
+        counts_by_route:
+          type: object
+          additionalProperties:
+            type: integer
+
+    Blocker:
+      type: object
+      required: [id, type, status, task_id, title]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [SECRET, CREDENTIAL, ASSET, DECISION, ENVIRONMENT, ACCOUNT]
+        status:
+          type: string
+          enum: [OPEN, RESOLVED]
+        task_id:
+          type: string
+        step:
+          type: [string, "null"]
+        title:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: [string, "null"]
+          format: date-time
+
+    HealthResponse:
+      type: object
+      required: [ffmpeg, gpu, models, disk, ytdlp, queue, drive, templates]
+      properties:
+        ffmpeg:
+          type: object
+          properties:
+            version:
+              type: string
+            libass:
+              type: boolean
+            harfbuzz:
+              type: boolean
+            fribidi:
+              type: boolean
+        gpu:
+          type: object
+          properties:
+            name:
+              type: [string, "null"]
+            vram_gb:
+              type: [number, "null"]
+            cuda:
+              type: boolean
+        models:
+          type: object
+          properties:
+            asr:
+              type: array
+              items:
+                type: string
+            llm:
+              type: object
+              properties:
+                provider:
+                  type: string
+                ok:
+                  type: boolean
+        disk:
+          type: object
+          properties:
+            free_gb:
+              type: number
+        ytdlp:
+          type: object
+          properties:
+            version:
+              type: string
+        queue:
+          type: object
+          properties:
+            depth:
+              type: integer
+        drive:
+          type: object
+          properties:
+            status:
+              type: string
+        templates:
+          type: object
+          properties:
+            valid:
+              type: integer
+            invalid:
+              type: integer

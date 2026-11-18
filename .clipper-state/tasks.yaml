@@ -4,13 +4,13 @@ version: 2
 tasks:
   # ---------- Phase 0: foundations + contract freeze ----------
   - {id: T-0.1, role: integrations, title: "Repo scaffold, uv/pnpm, Makefile, ruff/mypy/pytest, pre-commit, secret scanner, .env.example", deps: [], accept: "make check green on empty skeleton", status: READY}
-  - {id: T-0.2, role: orchestrator, title: "Verify Antigravity rules and skills load (list active rules/skills)", deps: [T-0.1], accept: "All 6 rules + 5 skills reported; glob rules fire on matching paths", status: TODO}
-  - {id: T-0.3, role: orchestrator, title: "Contract freeze: API_SPEC -> contracts/openapi.yaml, finalise schemas, tag contracts-v1", deps: [T-0.2], accept: "openapi validates; schemas validate fixtures", status: TODO}
-  - {id: T-0.4, role: integrations, title: "Toolchain verify: ffmpeg libass/harfbuzz/fribidi, Hindi+Bengali test render, GPU detect", deps: [T-0.1], accept: "Test ASS renders without tofu", hitl: ENVIRONMENT, status: TODO}
-  - {id: T-0.5, role: backend, title: "Config system (pydantic-settings, YAML loaders) + BlockerRequired", deps: [T-0.1], accept: "Missing secret raises BlockerRequired", status: TODO}
-  - {id: T-0.6, role: integrations, title: "File-based HITL core: blockers CRUD, validators, BLOCKERS.md generator, CLI", deps: [T-0.1], accept: "Create+resolve test blocker end to end", status: TODO}
-  - {id: T-0.7, role: pipeline, title: "Sample media + fixtures (en/hi/hinglish/bn short CC clips, transcripts)", deps: [T-0.1], accept: "Files+checksums present", hitl: ASSET, status: TODO}
-  - {id: T-0.8, role: uiux, title: "Mock API from OpenAPI + generated TS types", deps: [T-0.3], accept: "UI dev server runs against mock", status: TODO}
+  - {id: T-0.2, role: orchestrator, title: "Verify Antigravity rules and skills load (list active rules/skills)", deps: [T-0.1], accept: "All 6 rules + 5 skills reported; glob rules fire on matching paths", status: DONE}
+  - {id: T-0.3, role: orchestrator, title: "Contract freeze: API_SPEC -> contracts/openapi.yaml, finalise schemas, tag contracts-v1", deps: [T-0.2], accept: "openapi validates; schemas validate fixtures", status: DONE}
+  - {id: T-0.4, role: integrations, title: "Toolchain verify: ffmpeg libass/harfbuzz/fribidi, Hindi+Bengali test render, GPU detect", deps: [T-0.1], accept: "Test ASS renders without tofu", hitl: ENVIRONMENT, blocker: BLK-0001, status: BLOCKED}
+  - {id: T-0.5, role: backend, title: "Config system (pydantic-settings, YAML loaders) + BlockerRequired", deps: [T-0.1], accept: "Missing secret raises BlockerRequired", status: READY}
+  - {id: T-0.6, role: integrations, title: "File-based HITL core: blockers CRUD, validators, BLOCKERS.md generator, CLI", deps: [T-0.1], accept: "Create+resolve test blocker end to end", status: READY}
+  - {id: T-0.7, role: pipeline, title: "Sample media + fixtures (en/hi/hinglish/bn short CC clips, transcripts)", deps: [T-0.1], accept: "Files+checksums present", hitl: ASSET, status: READY}
+  - {id: T-0.8, role: uiux, title: "Mock API from OpenAPI + generated TS types", deps: [T-0.3], accept: "UI dev server runs against mock", status: READY}
   # ---------- Phase 1: backend core ----------
   - {id: T-1.1, role: backend, title: "DB models + Alembic migrations (DATABASE_SCHEMA)", deps: [T-0.5, T-0.3], accept: "Migrate up/down tests", status: TODO}
   - {id: T-1.2, role: backend, title: "Storage backends (LocalFS, S3 stub)", deps: [T-0.5], accept: "Unit tests", status: TODO}

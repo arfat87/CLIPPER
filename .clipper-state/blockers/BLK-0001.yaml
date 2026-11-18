@@ -1,0 +1,21 @@
+id: BLK-0001
+type: ASSET
+status: OPEN
+task_id: T-0.4
+step: 2
+title: "Devanagari & Bengali fonts needed for tofu-free ASS caption rendering"
+needed:
+  - key: "assets/fonts/NotoSansDevanagari-*.ttf & NotoSansBengali-*.ttf (or Mukta / Hind Siliguri)"
+    where: "assets/fonts/ or Google Drive 03_Fonts/"
+    how_to_get: "Drop SIL OFL .ttf/.otf font files (with LICENSE) into assets/fonts/ or Drive 03_Fonts/"
+why: "fc-list :lang=hi and fc-list :lang=bn are empty on this Linux VM; libass cannot shape Hindi/Bengali without Indic fonts (tofu boxes)."
+alternatives:
+  - "Approve installing SIL OFL Google Fonts (Noto Sans Devanagari, Noto Sans Bengali, Mukta, Hind Siliguri) directly into assets/fonts/."
+unblocked_meanwhile:
+  - T-0.1
+  - T-0.5
+  - T-0.6
+  - T-0.7
+  - T-0.8
+created_at: 2026-11-18T13:17:00Z
+reminders_sent: 0

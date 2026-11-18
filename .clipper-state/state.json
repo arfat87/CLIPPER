@@ -1,1 +1,1 @@
-{"current_task": null, "step": 0, "last_commit": null, "attempt": 0, "blocked_tasks": {}, "updated_at": null}
+{"current_task": "T-0.3", "step": 2, "last_commit": "ef870fe", "attempt": 1, "blocked_tasks": {"T-0.4": "BLK-0001"}, "updated_at": "2026-11-18T13:17:00Z"}
