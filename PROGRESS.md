@@ -26,5 +26,12 @@
   - `T-0.2` Verified all 6 `.agents/rules/*.md` (`00-global`, `50-security` always-on; `10-backend`, `20-pipeline`, `30-frontend`, `40-templates-captions` glob-triggered) and 5 workspace `.agents/skills/*/SKILL.md`.
   - `T-0.3` Converted `API_SPEC.md` + `ADMIN_PANEL_SPEC.md` into `contracts/openapi.yaml` (validated with `openapi-spec-validator`), added `drive_manifest.example.json` fixture, validated all 5 JSON schemas (`contracts/schemas/*.json`), and tagged `contracts-v1`.
   - Recorded Day-0 machine facts in `DECISIONS.md`; raised `BLK-0001` for missing Devanagari/Bengali fonts (`T-0.4`).
+- **[DONE] Phase 0 Parallel Lanes (`T-0.1`, `T-0.5`, `T-0.6`, `T-0.7`, `T-0.8` — `REV-0001` APPROVE):**
+  - `T-0.1` (`integrations`): Added `scripts/secret_scan.py`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `Makefile` (`lint` = ruff + mypy, `secret-scan`), and `hitl/tests` testpath in `pyproject.toml`.
+  - `T-0.5` (`backend`): Updated `backend/app/config.py` with Spec v2 `Settings` fields (`OLLAMA_HOST`/`OLLAMA_BASE_URL` alias, `drive_*`, `queue_url`, `storage_backend`, `admin_*`), `load_spec_v2_yaml_config()`, and `BlockerRequired` tests in `backend/tests/api/test_config.py`.
+  - `T-0.6` (`integrations`): Aligned `hitl/` (`raise_blocker.py`, `cli.py`, `models.py`, `notifier.py`, `validators.py`) to `.clipper-state/` with `.agent/` backward compatibility + `hitl/tests/test_hitl_v2.py`.
+  - `T-0.7` (`pipeline`): Generated deterministic `assets/samples/SHA256SUMS` and `backend/tests/pipeline/test_samples_and_fixtures.py` validating all sample media, transcripts, fixtures, and v2 templates.
+  - `T-0.8` (`uiux`): Built React 18 + Vite + Tailwind + strict TS scaffold in `frontend/`, generated `src/api/schema.d.ts` from `contracts/openapi.yaml`, added MSW mock API handlers, and verified `tsc --noEmit`, `vite build`, and `vitest run` (3/3 passed).
+
 
 
