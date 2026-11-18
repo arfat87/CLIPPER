@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0B0D10;
+  --surface: #141820;
+  --surface-2: #1C2230;
+  --border: #2A3242;
+  --text: #E8ECF2;
+  --text-dim: #9AA6B8;
+  --accent: #FFD400;
+  --accent-fg: #111111;
+  --ok: #3DDC84;
+  --warn: #FFB020;
+  --err: #FF5C5C;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+    color: var(--text);
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: Inter, "Noto Sans Devanagari", "Noto Sans Bengali", system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
