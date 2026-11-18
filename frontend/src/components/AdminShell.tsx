@@ -14,15 +14,6 @@ import {
   Sparkles,
   Type,
 } from "lucide-react";
-import { ApiError } from "../api/client";
-import {
-  useAdminAuditQuery,
-  useAdminBlockersQuery,
-  useAdminSettingsQuery,
-  useDriveStatusQuery,
-  useHealthQuery,
-  useJobsQuery,
-} from "../api/hooks";
 import { en } from "../i18n/en";
 import { ADMIN_SECTIONS, navigateToAdmin, navigateToTab } from "../router";
 import { type AdminSection, useStudioStore } from "../store/studioStore";
@@ -31,18 +22,19 @@ import {
   AdminFontsView,
   AdminPresetsView,
 } from "./admin/AdminAssetsViews";
-import { AdminTemplatesView } from "./admin/AdminTemplatesView";
-import { EmptyState, ErrorState, LoadingState, OfflineBanner } from "./StateViews";
+import { AdminBlockersView } from "./admin/AdminBlockersView";
+import { AdminDriveView } from "./admin/AdminDriveView";
 import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  StatusBadge,
-} from "./ui";
+  AdminAuditView,
+  AdminHealthView,
+  AdminJobsView,
+} from "./admin/AdminOpsViews";
+import { AdminPromptsView } from "./admin/AdminPromptsView";
+import { AdminScoringView } from "./admin/AdminScoringView";
+import { AdminSettingsView } from "./admin/AdminSettingsView";
+import { AdminTemplatesView } from "./admin/AdminTemplatesView";
+import { LoadingState, OfflineBanner } from "./StateViews";
+import { Badge, Button } from "./ui";
 
 const ADMIN_ICONS: Record<AdminSection, typeof Palette> = {
   templates: Palette,
@@ -62,13 +54,6 @@ const ADMIN_ICONS: Record<AdminSection, typeof Palette> = {
 export function AdminShell() {
   const { adminSection, simulation } = useStudioStore();
 
-  const blockersQuery = useAdminBlockersQuery();
-  const settingsQuery = useAdminSettingsQuery();
-  const driveQuery = useDriveStatusQuery();
-  const jobsQuery = useJobsQuery();
-  const healthQuery = useHealthQuery();
-  const auditQuery = useAdminAuditQuery();
-
   const sectionMeta = en.admin.sections[adminSection];
   const isOffline =
     (typeof navigator !== "undefined" && !navigator.onLine) ||
@@ -83,264 +68,28 @@ export function AdminShell() {
     switch (adminSection) {
       case "templates":
         return <AdminTemplatesView />;
-
       case "presets":
         return <AdminPresetsView />;
-
       case "fonts":
         return <AdminFontsView />;
-
       case "brandkits":
         return <AdminBrandKitsView />;
-
-      case "blockers": {
-        if (blockersQuery.isLoading) return <LoadingState />;
-        const items = blockersQuery.data?.items ?? [];
-        if (items.length === 0) {
-          return (
-            <EmptyState
-              title={en.admin.emptyTitle}
-              body={en.admin.emptyBody}
-            />
-          );
-        }
-        return (
-          <div className="space-y-3">
-            {items.map((blk) => (
-              <Card key={blk.id}>
-                <CardHeader>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Badge tone="route" size="sm">
-                        {blk.id}
-                      </Badge>
-                      <Badge tone="neutral" size="sm">
-                        {blk.type}
-                      </Badge>
-                    </div>
-                    <CardTitle className="mt-1.5">{blk.title}</CardTitle>
-                  </div>
-                  <StatusBadge status={blk.status} />
-                </CardHeader>
-                <CardDescription className="mt-2">
-                  Task: {blk.task_id}
-                  {blk.step ? ` · Step: ${blk.step}` : ""}
-                </CardDescription>
-              </Card>
-            ))}
-          </div>
-        );
-      }
-
-      case "settings": {
-        if (settingsQuery.isLoading) return <LoadingState />;
-        const data = settingsQuery.data ?? {};
-        const secrets =
-          typeof data.secrets === "object" && data.secrets !== null
-            ? (data.secrets as Record<string, { set?: boolean }>)
-            : {};
-        return (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Runtime Models &amp; Device</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-text-dim">ASR Engine</span>
-                  <span>{String(data.asr_engine ?? "faster-whisper")}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-dim">ASR Model</span>
-                  <span>{String(data.asr_model ?? "large-v3")}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-dim">Device</span>
-                  <span>{String(data.device ?? "cpu")}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-dim">LLM Provider</span>
-                  <span>{String(data.llm_provider ?? "ollama")}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Secrets Status (never values)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-xs">
-                {Object.entries(secrets).map(([key, meta]) => (
-                  <div key={key} className="flex items-center justify-between">
-                    <span className="font-mono text-text-dim">{key}</span>
-                    <Badge tone={meta?.set ? "ok" : "warn"}>
-                      {meta?.set ? "SET" : "NOT SET"}
-                    </Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        );
-      }
-
-      case "drive": {
-        if (driveQuery.isLoading) return <LoadingState />;
-        if (driveQuery.isError) {
-          return (
-            <ErrorState
-              title={en.library.errorTitle}
-              message={
-                driveQuery.error instanceof ApiError
-                  ? driveQuery.error.message
-                  : en.states.errorBody
-              }
-              onRetry={() => void driveQuery.refetch()}
-            />
-          );
-        }
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>{en.library.driveCardTitle}</CardTitle>
-              <StatusBadge status={driveQuery.data?.status ?? "DISABLED"} />
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs">
-              <p className="text-text-dim">
-                {en.library.driveRootLabel}:{" "}
-                <span className="font-mono text-text">
-                  {driveQuery.data?.root_folder_id ?? "—"}
-                </span>
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {Object.entries(driveQuery.data?.counts_by_route ?? {}).map(
-                  ([route, count]) => (
-                    <div
-                      key={route}
-                      className="rounded-sm border border-border bg-surface-2 p-3"
-                    >
-                      <p className="text-[11px] uppercase text-text-dim">{route}</p>
-                      <p className="text-lg font-bold text-text">{count}</p>
-                    </div>
-                  )
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        );
-      }
-
-      case "jobs": {
-        if (jobsQuery.isLoading) return <LoadingState />;
-        const items = jobsQuery.data?.items ?? [];
-        if (items.length === 0) {
-          return (
-            <EmptyState
-              title={en.jobs.emptyTitle}
-              body={en.jobs.emptyBody}
-            />
-          );
-        }
-        return (
-          <div className="space-y-3">
-            {items.map((job) => (
-              <Card key={job.id}>
-                <CardHeader>
-                  <div>
-                    <CardTitle>{job.title ?? job.id}</CardTitle>
-                    <CardDescription>
-                      {job.id} · {job.source_kind} · {job.language}
-                    </CardDescription>
-                  </div>
-                  <StatusBadge status={job.status} />
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        );
-      }
-
-      case "health": {
-        if (healthQuery.isLoading) return <LoadingState />;
-        const h = healthQuery.data;
-        return (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>FFmpeg &amp; Subtitle Stack</CardTitle>
-                <Badge tone={h?.ffmpeg?.libass ? "ok" : "err"}>
-                  {h?.ffmpeg?.libass ? "READY" : "CHECK"}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-1 text-xs">
-                <p>FFmpeg: {h?.ffmpeg?.version ?? "—"}</p>
-                <p>libass: {h?.ffmpeg?.libass ? "Enabled" : "Missing"}</p>
-                <p>HarfBuzz: {h?.ffmpeg?.harfbuzz ? "Enabled" : "Missing"}</p>
-                <p>FriBidi: {h?.ffmpeg?.fribidi ? "Enabled" : "Missing"}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Hardware, Queue &amp; Storage</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 text-xs">
-                <p>GPU: {h?.gpu?.name ?? "CPU mode"}</p>
-                <p>Disk free: {h?.disk?.free_gb ?? "—"} GB</p>
-                <p>yt-dlp: {h?.ytdlp?.version ?? "—"}</p>
-                <p>Queue depth: {h?.queue?.depth ?? 0}</p>
-              </CardContent>
-            </Card>
-          </div>
-        );
-      }
-
-      case "audit": {
-        if (auditQuery.isLoading) return <LoadingState />;
-        const items = auditQuery.data?.items ?? [];
-        if (items.length === 0) {
-          return (
-            <EmptyState
-              title={en.admin.emptyTitle}
-              body={en.admin.emptyBody}
-            />
-          );
-        }
-        return (
-          <div className="space-y-2">
-            {items.map((entry, idx) => (
-              <Card key={String(entry.id ?? idx)} className="p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Badge tone="route" size="sm">
-                      {String(entry.action ?? "write")}
-                    </Badge>
-                    <span className="font-medium text-text">
-                      {String(entry.target ?? "—")}
-                    </span>
-                  </div>
-                  <span className="text-text-dim">
-                    {String(entry.actor ?? "owner")} ·{" "}
-                    {String(entry.timestamp ?? "")}
-                  </span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        );
-      }
-
-      default:
-        return (
-          <Card variant="dashed">
-            <CardHeader>
-              <CardTitle>{sectionMeta.title}</CardTitle>
-              <Badge tone="accent">Shell Ready</Badge>
-            </CardHeader>
-            <CardDescription className="mt-2">
-              {sectionMeta.description}
-            </CardDescription>
-          </Card>
-        );
+      case "prompts":
+        return <AdminPromptsView />;
+      case "scoring":
+        return <AdminScoringView />;
+      case "settings":
+        return <AdminSettingsView />;
+      case "drive":
+        return <AdminDriveView />;
+      case "blockers":
+        return <AdminBlockersView />;
+      case "jobs":
+        return <AdminJobsView />;
+      case "health":
+        return <AdminHealthView />;
+      case "audit":
+        return <AdminAuditView />;
     }
   };
 
@@ -461,3 +210,5 @@ export function AdminShell() {
     </div>
   );
 }
+
+export default AdminShell;
