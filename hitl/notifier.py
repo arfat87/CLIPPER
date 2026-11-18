@@ -5,9 +5,10 @@ import smtplib
 from email.message import EmailMessage
 from pathlib import Path
 
+import yaml
 from jinja2 import Template
 
-from hitl.models import Blocker
+from hitl.models import Blocker, detect_leaked_secret
 
 EMAIL_HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
@@ -96,9 +97,116 @@ def render_blocker_email_text(blocker: Blocker) -> str:
     return "\n".join(lines)
 
 
-def send_blocker_notification(blocker: Blocker, root_dir: Path | None = None) -> dict:
-    """Send blocker email via SMTP if configured; always update BLOCKERS.md fallback."""
+def render_blockers_md(
+    blockers: list[Blocker],
+    state_label: str = ".clipper-state/blockers/",
+) -> str:
+    """Render deterministic BLOCKERS.md markdown from blocker records."""
+    lines: list[str] = [
+        f"# BLOCKERS (auto-generated / synced from `{state_label}`)",
+        "",
+    ]
+    if not blockers:
+        lines.append("No blockers recorded.")
+        lines.append("")
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            "| ID | Type | Status | Task | Title | Unblocks |",
+            "|---|---|---|---|---|---|",
+        ]
+    )
+    for b in blockers:
+        unblocks_list = b.unblocked_meanwhile if b.unblocked_meanwhile else [b.task_id]
+        unblocks = ", ".join(f"`{t}`" for t in unblocks_list)
+        safe_title = b.title.replace("|", "\\|")
+        lines.append(
+            f"| `{b.id}` | `{b.type.value}` | `{b.status.value}` | `{b.task_id}` | {safe_title} | {unblocks} |"
+        )
+
+    for b in blockers:
+        lines.extend(
+            [
+                "",
+                f"### `{b.id}` Details",
+                f"- **Status:** `{b.status.value}` (task `{b.task_id}`, step {b.step})",
+                f"- **Why:** {b.why or 'N/A'}",
+            ]
+        )
+        if b.needed:
+            needed_desc = "; ".join(
+                f"`{item.key}` in `{item.where}`"
+                + (f" ({item.how_to_get})" if item.how_to_get else "")
+                for item in b.needed
+            )
+            lines.append(f"- **Needed:** {needed_desc}")
+        if b.alternatives:
+            lines.append(f"- **Alternatives:** {'; '.join(b.alternatives)}")
+        if b.correlation_token:
+            lines.append(f"- **Correlation Token:** `{b.correlation_token}`")
+        if b.resolution_note:
+            lines.append(f"- **Resolution:** {b.resolution_note}")
+        if b.resolved_at:
+            lines.append(f"- **Resolved At:** `{b.resolved_at}`")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_blockers_md(
+    blockers: list[Blocker],
+    root_dir: Path | None = None,
+    state_label: str = ".clipper-state/blockers/",
+) -> Path:
+    """Render and write BLOCKERS.md after verifying no secret values leaked."""
     root = root_dir or Path.cwd()
+    content = render_blockers_md(blockers, state_label=state_label)
+    if detect_leaked_secret(content):
+        raise ValueError("Refusing to write BLOCKERS.md because a secret pattern was detected.")
+    blockers_md = root / "BLOCKERS.md"
+    blockers_md.write_text(content, encoding="utf-8")
+    return blockers_md
+
+
+def _load_blockers_from_dir(blockers_dir: Path) -> list[Blocker]:
+    items: list[Blocker] = []
+    if not blockers_dir.exists():
+        return items
+    for p in sorted(blockers_dir.glob("BLK-*.yaml")):
+        data = yaml.safe_load(p.read_text(encoding="utf-8"))
+        if data:
+            items.append(Blocker.model_validate(data))
+    return items
+
+
+def send_blocker_notification(
+    blocker: Blocker,
+    root_dir: Path | None = None,
+    state_dir: Path | None = None,
+    blockers: list[Blocker] | None = None,
+) -> dict[str, object]:
+    """Send blocker email via SMTP if configured; always sync BLOCKERS.md fallback."""
+    root = root_dir or Path.cwd()
+    if state_dir is not None:
+        sdir = state_dir
+    elif (root / ".clipper-state").exists():
+        sdir = root / ".clipper-state"
+    elif (root / ".agent").exists():
+        sdir = root / ".agent"
+    else:
+        sdir = root / ".clipper-state"
+
+    try:
+        rel_label = f"{sdir.relative_to(root).as_posix()}/blockers/"
+    except ValueError:
+        rel_label = f"{sdir.name}/blockers/"
+
+    all_blockers = blockers if blockers is not None else _load_blockers_from_dir(sdir / "blockers")
+    if all(b.id != blocker.id for b in all_blockers):
+        all_blockers = [*all_blockers, blocker]
+    write_blockers_md(all_blockers, root_dir=root, state_label=rel_label)
+
     smtp_user = os.getenv("NOTIFY_SMTP_USER", "").strip()
     smtp_pass = os.getenv("NOTIFY_SMTP_APP_PASSWORD", "").strip()
     owner_email = os.getenv("OWNER_EMAIL", "").strip()
@@ -111,16 +219,6 @@ def send_blocker_notification(blocker: Blocker, root_dir: Path | None = None) ->
     )
     text_body = render_blocker_email_text(blocker)
     html_body = render_blocker_email_html(blocker)
-
-    # Always write human-readable fallback to BLOCKERS.md
-    blockers_md = root / "BLOCKERS.md"
-    entry = f"\n## {blocker.id}: {blocker.title} (`{blocker.status.value}`)\n\n```text\n{text_body}\n```\n"
-    if blockers_md.exists():
-        existing = blockers_md.read_text(encoding="utf-8")
-        if blocker.id not in existing:
-            blockers_md.write_text(existing + entry, encoding="utf-8")
-    else:
-        blockers_md.write_text("# CLIPPER — Active & Historical HITL Blockers\n" + entry, encoding="utf-8")
 
     if smtp_user and smtp_pass and owner_email:
         try:
